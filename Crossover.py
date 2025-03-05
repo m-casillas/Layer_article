@@ -1,4 +1,6 @@
 from globalsENAS import *
+from Architecture import *
+from Genotype import *
 """#CROSSOVERR"""
 
 #This class takes two architectures and combines them with Single Point Crossover

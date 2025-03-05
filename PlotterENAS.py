@@ -13,8 +13,6 @@ import matplotlib.cm as cm
 
 #
 class PlotterENAS:
-
-
     def plot_bars_matplotlib(self, reportCSV_list, column_list):
 
         # Columns to plot
