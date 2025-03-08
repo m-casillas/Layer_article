@@ -3,7 +3,7 @@ from Architecture import *
 """#Layer Representation Class"""
 
 #Architecture is a deep neural network consisting in the input, conv layer, pooling layer, conv layer, pooling layer, fully connected layer
-#gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':2}, {'CONV':[64,3]}, {'POOLMAX':2}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
+#gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':2}, {'CONV':[64,3]}, {'POOLAVG':2}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
 class LayerRepresentation(Architecture):
    
     #Creates the architecture using the genotype information
@@ -15,7 +15,7 @@ class LayerRepresentation(Architecture):
                 layer_type = list(layer.keys())[0] #Get the key of the dictionary "the layer type"
                 if layer_type == 'INP':
                     input_size = layer[layer_type]
-                    sequential_model.append(Input(shape=(input_size, input_size, 1)))
+                    sequential_model.append(Input(shape=(input_size, input_size, 3)))
                 elif layer_type == 'CONV':
                     num_filters = layer[layer_type][0]
                     kernel_size = (layer[layer_type][1], layer[layer_type][1])
@@ -23,6 +23,9 @@ class LayerRepresentation(Architecture):
                 elif layer_type == 'POOLMAX':
                     pool_size = (layer[layer_type], layer[layer_type])
                     sequential_model.append(layers.MaxPooling2D(pool_size))
+                elif layer_type == 'POOLAVG':
+                    pool_size = (layer[layer_type], layer[layer_type])
+                    sequential_model.append(layers.AveragePooling2D(pool_size))
                 elif layer_type == 'FLATTEN':
                     sequential_model.append(layers.Flatten())
                 elif layer_type == 'DENSE':
