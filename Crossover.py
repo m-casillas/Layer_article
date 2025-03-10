@@ -28,6 +28,26 @@ class Crossover:
         child2_arch = Architecture(arch_type='S', idx=arch_obj1.idx + '-' + arch_obj2.idx + '(2)', genotype=Genotype('L', 'IV', gen_list_child2))
 
         return child1_arch, child2_arch
+    
+    def uniform_crossover(self, arch_obj1, arch_obj2):
+        self.parent1 = arch_obj1
+        self.parent2 = arch_obj2
+
+        gen_list_child1 = []
+        gen_list_child2 = []
+
+        for gene1, gene2 in zip(self.parent1.genotype.gen_list, self.parent2.genotype.gen_list):
+            if random.random() < 0.5:
+                gen_list_child1.append(gene1)
+                gen_list_child2.append(gene2)
+            else:
+                gen_list_child1.append(gene2)
+                gen_list_child2.append(gene1)
+
+        child1_arch = Architecture(arch_type='S', idx=arch_obj1.idx + '-' + arch_obj2.idx + '(1)', genotype=Genotype('L', 'IV', gen_list_child1))
+        child2_arch = Architecture(arch_type='S', idx=arch_obj1.idx + '-' + arch_obj2.idx + '(2)', genotype=Genotype('L', 'IV', gen_list_child2))
+
+        return child1_arch, child2_arch
 
     def __init__(self):
         self.parent1 = None
