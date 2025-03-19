@@ -1,4 +1,5 @@
 from globalsENAS import *
+import random
 """#Utilities
 
 """
@@ -28,23 +29,24 @@ def create_pool_layer(ks = None):
         #A Pool layer has: kernel size (ks)... more to come
         #If ks is None, it is randomly created
         if ks == None:
-            ks = random.choice(POOL_KERN)
+            ks = random.choice(list(POOL_KERNELS.values()))
         return {'POOLMAX':ks}
 
 def create_conv_layer(nf = None, ks = None):
         #A Conv layer has: Number of filters (nf) kernel size (ks)... more to come
         #If nf and ks are None, it is randomly created
         if nf == None and ks == None:
-            nf = random.randint(NUM_FILTERS[0], NUM_FILTERS[1]+1)
-            ks = random.choice(CONV_KERN)
+            nf = random.choice(list(NUM_FILTERS.values())) #{'CONV':[NUM_FILTERS[np.random.randint(0, len(NUM_FILTERS))],CONV_KERNELS[np.random.randint(0, len(CONV_KERNELS))]]}, This is for MUTATION
+            ks = random.choice(list(CONV_KERNELS.values()))
         return {'CONV':[nf, ks]}
 
 def create_dense_layer(nn = None, act = None):
         #A Dense layer has: Number of neurons (nn) and activation function (act)... more to come
         #If nn and act are None, it is randomly created
         if nn == None and act == None:
-            nn = random.randint(DENSE_NEURONS[0], DENSE_NEURONS[1]+1)
-        return {'DENSE':[nn, 'relu']}
+            nn = random.choice(list(DENSE_NEURONS.values()))
+            act = 'relu'
+        return {'DENSE':[nn, act]}
 
 def create_last_name(column_list):
     last_name = ''
@@ -62,3 +64,7 @@ def determine_label_filename(filename):
     else:
         label = '?'
     return label
+
+def get_key_from_value(dictio, val):
+    key = next((k for k, v in dictio.items() if v == val), None)
+    return key

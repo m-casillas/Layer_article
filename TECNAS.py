@@ -126,14 +126,17 @@ class TECNAS:
 
     def random_individual(self):
         # TODO: Add more representations and encodings.
-        gen_list = [{'INP':32},
-                    {'CONV':[np.random.randint(NUM_FILTERS[0],NUM_FILTERS[1]+1), np.random.randint(CONV_KERN[0],CONV_KERN[1]+1)]},
+        
+        gen_list = [
+                    {'INP':32},
+                    create_conv_layer(),
                     create_pool_layer(),
-                    {'CONV':[np.random.randint(NUM_FILTERS[0],NUM_FILTERS[1]+1), np.random.randint(CONV_KERN[0],CONV_KERN[1]+1)]},
-                    {'POOLMAX':np.random.randint(POOL_KERN[0],POOL_KERN[1]+1)}, # CHECK THIS
+                    create_conv_layer(),
+                    create_pool_layer(),
                     {'FLATTEN':None},
-                    {'DENSE':[np.random.randint(DENSE_NEURONS[0],DENSE_NEURONS[1]+1),'relu']},
-                    {'DENSE':[10,'softmax']}]
+                    create_dense_layer(),
+                    create_dense_layer(10, 'softmax')
+                ]
 
         genotype = Genotype('L', 'IV', gen_list)
         idx = random.randint(0,1000)

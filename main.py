@@ -51,5 +51,7 @@ tecNAS.ENAS()
 
 random.seed(42)
 tecNAS = TECNAS()
+print('Hola')
 if RUN_ENAS == True:
     tecNAS.ENAS()
+

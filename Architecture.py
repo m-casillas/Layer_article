@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import random
-from globalsENAS import EPOCHS
+from globalsENAS import *
+from configENAS import *
 
 class Architecture(ABC):
     def __str__(self):
