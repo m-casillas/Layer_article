@@ -1,11 +1,71 @@
 from globalsENAS import *
 from Architecture import *
+from utilitiesENAS import *
+from tensorflow.keras import datasets, layers, models
+from tensorflow.keras.layers import Input
+
 """#Layer Representation Class"""
 
 #Architecture is a deep neural network consisting in the input, conv layer, pooling layer, conv layer, pooling layer, fully connected layer
-#gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':2}, {'CONV':[64,3]}, {'POOLAVG':2}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
+#gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':[-1,2]}, {'CONV':[64,3]}, {'POOLMAX':[-1,2]}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
 class LayerRepresentation(Architecture):
-   
+    def genList_to_integer_vector(self):
+        #Represents the gen list (list of dictionaries) as an integer vector. The input and the last Dense layer are not included.
+        integer_vector = []
+
+        #ARCH TO INT FUNCTION. ALSO NEED TO CREATE INT TO ARCH FUNCTION
+        for dictio in self.genotype.gen_list:
+            for layer_type in dictio.keys():
+                layer_type_int = get_key_from_value(LAYERS_TYPES, layer_type)
+                if layer_type == 'INP':
+                    continue
+                elif layer_type == 'CONV':
+                    integer_vector.append(layer_type_int)
+                    nf = get_key_from_value(NUM_FILTERS, dictio[layer_type][0])
+                    integer_vector.append(nf)
+                    ks = get_key_from_value(CONV_KERNELS, dictio[layer_type][1])
+                    integer_vector.append(ks)
+                elif layer_type == 'POOLMAX':
+                    integer_vector.append(layer_type_int)
+                    nf = -1 #This must be -1
+                    integer_vector.append(nf)
+                    ks = get_key_from_value(POOL_KERNELS, dictio[layer_type][1])
+                    integer_vector.append(ks)
+                elif layer_type == 'FLATTEN':
+                    continue
+                elif layer_type == 'DENSE':
+                    integer_vector.append(layer_type_int)
+                    nn = get_key_from_value(DENSE_NEURONS, dictio[layer_type][0])
+                    integer_vector.append(nn)
+                    act = get_key_from_value(ACTIVATION_FUNCTIONS, dictio[layer_type][1])
+                    integer_vector.append(act)
+        return integer_vector
+    
+    def integer_vector_to_genList(self, integer_vector):
+        #Represents the integer vector as a gen list (list of dictionaries). The input and the last Dense layer are not included.
+        gen_list = [{'INP':INPUT_SIZE}]
+        for i in range(0, len(integer_vector), 3):
+            layer_type = LAYERS_TYPES[integer_vector[i]]
+            if layer_type == 'INP':
+                continue
+            elif layer_type == 'CONV':
+                nf = list(NUM_FILTERS.values())[integer_vector[i+1]]
+                ks = list(CONV_KERNELS.values())[integer_vector[i+2]]
+                gen_list.append({'CONV':[nf, ks]})
+            elif layer_type == 'POOLMAX':
+                nf = -1
+                ks = list(POOL_KERNELS.values())[integer_vector[i+2]]
+                gen_list.append({'POOLMAX':[nf, ks]})
+            elif layer_type == 'FLATTEN':
+                continue
+            elif layer_type == 'DENSE':
+                nn = list(DENSE_NEURONS.values())[integer_vector[i+1]]
+                act = list(ACTIVATION_FUNCTIONS.values())[integer_vector[i+2]]
+                gen_list.append({'DENSE':[nn, act]})
+        #I want to append FLATTEN:None before the two last Dense layers
+        gen_list.insert(-2, {'FLATTEN':None})
+        return gen_list
+
     #Creates the architecture using the genotype information
     def decode(self):
         if self.genotype.rep_type == 'L':
@@ -36,3 +96,7 @@ class LayerRepresentation(Architecture):
                     print(f'ERROR: {layer_type} Layer type not recognized')
                     sequential_model = None
         return sequential_model
+    
+    def __init__(self, arch_type = 'S', idx = 9999, genotype = None):
+        super().__init__(arch_type, idx, genotype)
+        self.integer_encoding = self.genList_to_integer_vector()

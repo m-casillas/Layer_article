@@ -1,3 +1,6 @@
+import copy
+import os
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 import random
 import pandas as pd
 import numpy as np
@@ -21,35 +24,25 @@ from globalsENAS import *
 from configENAS import *
 
 tecNAS = TECNAS()
+reporter = ReportENAS()
 arch = tecNAS.random_individual()
-integer_vector = []
+archP1 = tecNAS.random_individual()
+archP2 = tecNAS.random_individual()
+archM = tecNAS.random_individual()
 
-#ARCH TO INT FUNCTION. ALSO NEED TO CREATE INT TO ARCH FUNCTION
-for dictio in arch.genotype.gen_list:
-    for layer_type in dictio.keys():
-        print(layer_type)
-        if layer_type == 'INP':
-            continue
-        elif layer_type == 'CONV':
-            nf = get_key_from_value(NUM_FILTERS, dictio[layer_type][0])
-            integer_vector.append(nf)
-            ks = get_key_from_value(CONV_KERNELS, dictio[layer_type][1])
-            integer_vector.append(ks)
-        elif layer_type == 'POOLMAX':
-            ks = get_key_from_value(POOL_KERNELS, dictio[layer_type])
-            integer_vector.append(ks)
-        elif layer_type == 'FLATTEN':
-            continue
-        elif layer_type == 'DENSE':
-            nn = get_key_from_value(DENSE_NEURONS, dictio[layer_type][0])
-            integer_vector.append(nn)
-            act = get_key_from_value(ACTIVATION_FUNCTIONS, dictio[layer_type][1])
-            integer_vector.append(act)
+print(arch)
+print(arch.integer_encoding)
 
-print(integer_vector)
-print(arch.genotype.gen_list)
-        
-#from dictio in arch.genotype:
-#    get_key_from_value(dictio, val)
+arch.isChild = True
+archM.isChild = True
+archM.parent1 = archP1
+archM.parent2 = archP2
+archM.before_mutation = copy.deepcopy(arch)
+archM.dP1 = hamming_distance(arch.integer_encoding, archP1.integer_encoding)
+archM.dP2 = hamming_distance(arch.integer_encoding, archP2.integer_encoding)
+archM.dBM = hamming_distance(archM.integer_encoding, arch.integer_encoding)
+reporter.save_arch_info(archM)
+reporter.save_arch_info(archP1)
+reporter.save_arch_info(archP2)
 
-#gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':2}, {'CONV':[64,3]}, {'POOLMAX':2}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
+

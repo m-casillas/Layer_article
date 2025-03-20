@@ -35,6 +35,14 @@ class Architecture(ABC):
         self.num_params = random.randint(0,10)
         self.genotype = genotype #object of Genotype class
         self.genoStr = str(self.genotype.gen_list)
+        self.parent1 = []
+        self.parent2 = []
+        self.before_mutation = []
+        #Hamming distance between this architecture and the parent1 architecture (between encodings)
+        self.dP1 = 99999
+        self.dP2 = 99999
+        self.dBM = 99999
+        self.isChild = False #Use this for the architecture info report
     
     @abstractmethod
     def decode(self):

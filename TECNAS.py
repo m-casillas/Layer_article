@@ -24,6 +24,7 @@ import matplotlib.cm as cm
 
 #TECNAS is a class that performs evoltuionary neural architecture search, using genetic operators
 class TECNAS:
+
     #check_pool_pool determines if there are two consecutive MAXPOOL layers, and change the second one for a CONV. WORKING ON THIS ==================================
     def check_pool_pool(self, current_layer_index):
         genotype = self.pop[0].genotype.gen_list  # Assuming we're modifying the first architecture in the population
@@ -128,7 +129,7 @@ class TECNAS:
         # TODO: Add more representations and encodings.
         
         gen_list = [
-                    {'INP':32},
+                    {'INP':INPUT_SIZE},
                     create_conv_layer(),
                     create_pool_layer(),
                     create_conv_layer(),
@@ -141,6 +142,7 @@ class TECNAS:
         genotype = Genotype('L', 'IV', gen_list)
         idx = random.randint(0,1000)
         arch_obj = LayerRepresentation('S', str(idx), genotype)
+    
         return arch_obj
 
     def train_model(self, arch_obj):

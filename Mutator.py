@@ -2,7 +2,7 @@ from globalsENAS import *
 """# Mutator classs"""
 
 #This class mutates each layer randomly. CONV, POOLMAX, DENSE, etc
-#gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':2}, {'CONV':[64,3]}, {'POOLMAX':2}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
+#gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':[-1,2]}, {'CONV':[64,3]}, {'POOLMAX':[-1,2]}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
 class Mutator:
     #layer_types = ['INP', 'CONV', 'POOLMAX', 'FLATTEN', 'DENSE']
     #MINMAX_LAYERS = [3,20]

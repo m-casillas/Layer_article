@@ -1,7 +1,6 @@
 from globalsENAS import *
 """# Genotype Class"""
 
-#gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':2}, {'CONV':[64,3]}, {'POOLMAX':2}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
 class Genotype:
     def __str__(self):
         return 'GENOTYPE' + str(self.gen_list)

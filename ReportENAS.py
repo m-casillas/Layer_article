@@ -1,5 +1,46 @@
 import pandas as pd
+from globalsENAS import *
+from TECNAS import *
+
 class ReportENAS:
+    def save_arch_info(self, arch):
+
+        if arch.isChild == True:
+            parent1_integer_encoding = arch.parent1.integer_encoding
+            parent2_integer_encoding = arch.parent2.integer_encoding
+            before_mutation_integer_encoding = arch.before_mutation.integer_encoding
+        else:
+            parent1_integer_encoding = []
+            parent2_integer_encoding = []
+            before_mutation_integer_encoding = []
+            
+
+        data_arch = pd.DataFrame({
+            'ID': [arch.idx], 
+            'Integer_encoding': [str(arch.integer_encoding)],
+            'Genotype': [arch.genoStr], 
+            'Type': [arch.arch_type], 
+            'Accuracy': [arch.acc], 
+            'Loss': [arch.loss], 
+            'FLOPs': [arch.flops], 
+            'CPU Hours': [arch.cpu_hours], 
+            'Number of Parameters': [arch.num_params], 
+            'Parent1': [parent1_integer_encoding],
+            'Parent2': [parent2_integer_encoding],
+            'Before Mutation': [before_mutation_integer_encoding],
+            'HD_P1': [arch.dP1],
+            'HD_P2': [arch.dP2],
+            'HD_BM': [arch.dBM]
+        })
+        path_report = os.path.join(path_results, 'architectures.csv')
+        print(path_report)
+        #Check if the file exists to add the headers or not.
+        file_exists = os.path.exists(path_report)
+
+        data_arch.to_csv(path_report, mode='a', index=False, header=not file_exists)
+        print(f'Architecture info saved to {path_report}')
+
+
     def create_report(self, reporting_single_arch = False, single_arch = None):
         execList = list(range(1,EXECUTIONS+1))
         epochsList = list(range(1, EPOCHS+1))

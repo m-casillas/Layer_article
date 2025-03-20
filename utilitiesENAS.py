@@ -1,5 +1,9 @@
 from globalsENAS import *
 import random
+import tensorflow as tf
+from tensorflow.python.profiler.model_analyzer import profile
+from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
+from tensorflow.keras.layers import Input
 """#Utilities
 
 """
@@ -30,13 +34,14 @@ def create_pool_layer(ks = None):
         #If ks is None, it is randomly created
         if ks == None:
             ks = random.choice(list(POOL_KERNELS.values()))
-        return {'POOLMAX':ks}
+        return {'POOLMAX':[-1, ks]} #-1 is neccesary to keep pool layers the same size as conv layers. It will never mutate
 
 def create_conv_layer(nf = None, ks = None):
         #A Conv layer has: Number of filters (nf) kernel size (ks)... more to come
         #If nf and ks are None, it is randomly created
         if nf == None and ks == None:
-            nf = random.choice(list(NUM_FILTERS.values())) #{'CONV':[NUM_FILTERS[np.random.randint(0, len(NUM_FILTERS))],CONV_KERNELS[np.random.randint(0, len(CONV_KERNELS))]]}, This is for MUTATION
+            #{'CONV':[NUM_FILTERS[np.random.randint(0, len(NUM_FILTERS))],CONV_KERNELS[np.random.randint(0, len(CONV_KERNELS))]]}, This is for MUTATION
+            nf = random.choice(list(NUM_FILTERS.values())) 
             ks = random.choice(list(CONV_KERNELS.values()))
         return {'CONV':[nf, ks]}
 
@@ -44,7 +49,7 @@ def create_dense_layer(nn = None, act = None):
         #A Dense layer has: Number of neurons (nn) and activation function (act)... more to come
         #If nn and act are None, it is randomly created
         if nn == None and act == None:
-            nn = random.choice(list(DENSE_NEURONS.values()))
+            nn = random.choice(list(DENSE_NEURONS.values())[1:]) #Ignore the first number (10), that's for the last layer
             act = 'relu'
         return {'DENSE':[nn, act]}
 
@@ -66,5 +71,14 @@ def determine_label_filename(filename):
     return label
 
 def get_key_from_value(dictio, val):
+    #Get the key from a value in a dictionary
     key = next((k for k, v in dictio.items() if v == val), None)
     return key
+
+def hamming_distance(str1, str2):
+    #Calculate the Hamming distance between two strings. 
+    #It returns how many characters differ between two strings.
+    if len(str1) != len(str2):
+        print("Vectors must be of the same length")
+        return None
+    return sum(c1 != c2 for c1, c2 in zip(str1, str2))
