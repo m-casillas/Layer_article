@@ -81,10 +81,10 @@ class LayerRepresentation(Architecture):
                     kernel_size = (layer[layer_type][1], layer[layer_type][1])
                     sequential_model.append(layers.Conv2D(num_filters, kernel_size, activation='relu', padding='same'))
                 elif layer_type == 'POOLMAX':
-                    pool_size = (layer[layer_type], layer[layer_type])
+                    pool_size = (layer[layer_type][1], layer[layer_type][1])
                     sequential_model.append(layers.MaxPooling2D(pool_size))
                 elif layer_type == 'POOLAVG':
-                    pool_size = (layer[layer_type], layer[layer_type])
+                    pool_size = (layer[layer_type][1], layer[layer_type][1])
                     sequential_model.append(layers.AveragePooling2D(pool_size))
                 elif layer_type == 'FLATTEN':
                     sequential_model.append(layers.Flatten())

@@ -1,10 +1,13 @@
 import pandas as pd
+import numpy as np
 from globalsENAS import *
-from TECNAS import *
+from configENAS import *
+#from TECNAS import *
 
 class ReportENAS:
     def save_arch_info(self, arch):
 
+        '''
         if arch.isChild == True:
             parent1_integer_encoding = arch.parent1.integer_encoding
             parent2_integer_encoding = arch.parent2.integer_encoding
@@ -12,13 +15,29 @@ class ReportENAS:
         else:
             parent1_integer_encoding = []
             parent2_integer_encoding = []
-            before_mutation_integer_encoding = []
-            
+            before_mutation_integer_encoding = []'
+        '''
 
+        if arch.parent1 == None or arch.parent1 == []:
+            parent1_integer_encoding = []
+        else:
+            parent1_integer_encoding = arch.parent1.integer_encoding
+        if arch.parent2 == None or arch.parent2 == []:
+            parent2_integer_encoding = []
+        else:
+            parent2_integer_encoding = arch.parent2.integer_encoding
+        if arch.before_mutation == None or arch.before_mutation == []:
+            before_mutation_integer_encoding = []
+        else:
+            before_mutation_integer_encoding = arch.before_mutation.integer_encoding
+        
         data_arch = pd.DataFrame({
             'ID': [arch.idx], 
             'Integer_encoding': [str(arch.integer_encoding)],
             'Genotype': [arch.genoStr], 
+            'Mutation type': [mutation_type],
+            'Crossover type': [crossover_type],
+            'Search strategy': [search_strategy],
             'Type': [arch.arch_type], 
             'Accuracy': [arch.acc], 
             'Loss': [arch.loss], 

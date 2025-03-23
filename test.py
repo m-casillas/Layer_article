@@ -25,6 +25,7 @@ from configENAS import *
 
 tecNAS = TECNAS()
 reporter = ReportENAS()
+
 arch = tecNAS.random_individual()
 archP1 = tecNAS.random_individual()
 archP2 = tecNAS.random_individual()
@@ -44,5 +45,3 @@ archM.dBM = hamming_distance(archM.integer_encoding, arch.integer_encoding)
 reporter.save_arch_info(archM)
 reporter.save_arch_info(archP1)
 reporter.save_arch_info(archP2)
-
-

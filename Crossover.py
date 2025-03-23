@@ -1,6 +1,7 @@
 from globalsENAS import *
 from Architecture import *
 from Genotype import *
+from LayerRepresentation import *
 """#CROSSOVERR"""
 
 #This class takes two architectures and combines them with Single Point Crossover
@@ -15,8 +16,8 @@ class Crossover:
 
         gen_list_child1 = self.parent1.genotype.gen_list[:point] + self.parent2.genotype.gen_list[point:]#len(self.parent2.genotype.gen_list)-3]
         gen_list_child2 = self.parent2.genotype.gen_list[:point] + self.parent1.genotype.gen_list[point:]#len(self.parent1.genotype.gen_list)-3]
-        child1_arch = Architecture(arch_type = 'S', idx = arch_obj1.idx+'-'+arch_obj2.idx+'(1)', genotype = Genotype('L', 'IV', gen_list_child1))
-        child2_arch = Architecture(arch_type = 'S', idx = arch_obj1.idx+'-'+arch_obj2.idx+'(2)', genotype = Genotype('L', 'IV', gen_list_child2))
+        child1_arch = LayerRepresentation(arch_type = 'S', idx = arch_obj1.idx+'-'+arch_obj2.idx+'(1)', genotype = Genotype('L', 'IV', gen_list_child1))
+        child2_arch = LayerRepresentation(arch_type = 'S', idx = arch_obj1.idx+'-'+arch_obj2.idx+'(2)', genotype = Genotype('L', 'IV', gen_list_child2))
         return child1_arch, child2_arch
 
     def two_point_crossover(self, arch_obj1, arch_obj2, point1 = 2, point2 = 5):
@@ -24,10 +25,8 @@ class Crossover:
         self.parent2 = arch_obj2
         gen_list_child1 = (self.parent1.genotype.gen_list[:point1] + self.parent2.genotype.gen_list[point1:point2] + self.parent1.genotype.gen_list[point2:])
         gen_list_child2 = (self.parent2.genotype.gen_list[:point1] + self.parent1.genotype.gen_list[point1:point2] + self.parent2.genotype.gen_list[point2:])
-        child1_arch = Architecture(arch_type='S', idx=arch_obj1.idx + '-' + arch_obj2.idx + '(1)', genotype=Genotype('L', 'IV', gen_list_child1))
-
-        child2_arch = Architecture(arch_type='S', idx=arch_obj1.idx + '-' + arch_obj2.idx + '(2)', genotype=Genotype('L', 'IV', gen_list_child2))
-
+        child1_arch = LayerRepresentation(arch_type='S', idx=arch_obj1.idx + '-' + arch_obj2.idx + '(1)', genotype=Genotype('L', 'IV', gen_list_child1))
+        child2_arch = LayerRepresentation(arch_type='S', idx=arch_obj1.idx + '-' + arch_obj2.idx + '(2)', genotype=Genotype('L', 'IV', gen_list_child2))
         return child1_arch, child2_arch
     
     def uniform_crossover(self, arch_obj1, arch_obj2):
@@ -45,8 +44,8 @@ class Crossover:
                 gen_list_child1.append(gene2)
                 gen_list_child2.append(gene1)
 
-        child1_arch = Architecture(arch_type='S', idx=arch_obj1.idx + '-' + arch_obj2.idx + '(1)', genotype=Genotype('L', 'IV', gen_list_child1))
-        child2_arch = Architecture(arch_type='S', idx=arch_obj1.idx + '-' + arch_obj2.idx + '(2)', genotype=Genotype('L', 'IV', gen_list_child2))
+        child1_arch = LayerRepresentation(arch_type='S', idx=arch_obj1.idx + '-' + arch_obj2.idx + '(1)', genotype=Genotype('L', 'IV', gen_list_child1))
+        child2_arch = LayerRepresentation(arch_type='S', idx=arch_obj1.idx + '-' + arch_obj2.idx + '(2)', genotype=Genotype('L', 'IV', gen_list_child2))
 
         return child1_arch, child2_arch
 

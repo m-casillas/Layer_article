@@ -1,5 +1,6 @@
 from globalsENAS import *
 from utilitiesENAS import *
+from configENAS import *
 import numpy as np
 import time
 import pandas as pd
@@ -133,7 +134,7 @@ class PlotterENAS:
 
     def plot_accuracy_loss_histories(self, plot_type):
         plt.figure(figsize=(10, 6))
-        acc_loss_history = self.accuracy_histories if plot_type == 'A' else self.loss_histories
+        acc_loss_history = self.tecNASobj.accuracy_histories if plot_type == 'A' else self.tecNASobj.loss_histories
         title = 'Validation Accuracy Histories' if plot_type == 'A' else 'Training Loss Histories'
         ylabel = 'Accuracy' if plot_type == 'A' else 'Loss'
         # Plot each network's validation accuracy history
@@ -143,7 +144,7 @@ class PlotterENAS:
         # Add labels and legend
         plt.xlabel('Epoch')
         plt.ylabel(ylabel)
-        title_aux = determine_label_filename(self.filename)
+        title_aux = determine_label_filename(self.tecNASobj.filename)
         title = f'{title} - {title_aux}'
         plt.title(title)
         plt.legend()

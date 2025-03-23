@@ -9,7 +9,11 @@ from globalsENAS import *
 from utilitiesENAS import *
 from configENAS import *
 from Genotype import *
+from ReportENAS import *
+from PlotterENAS import *
 from LayerRepresentation import *
+from Crossover import *
+from Mutator import *
 import numpy as np
 import time
 import pandas as pd
@@ -35,33 +39,6 @@ class TECNAS:
                 new_conv_layer = create_conv_layer()  # Create a CONV layer
                 genotype[current_layer_index + 1] = new_conv_layer  # Replace the next layer
                 print(f"Replaced layer {current_layer_index + 1} (POOLMAX) with {new_conv_layer}.")
-
-    def create_report(self, reporting_single_arch = False, single_arch = None):
-        execList = list(range(1,EXECUTIONS+1))
-        epochsList = list(range(1, EPOCHS+1))
-
-        if reporting_single_arch == True: #Print the median arch information
-            empty_list = ['']*(len(epochsList)-1)
-            data = pd.DataFrame({   f"Epochs":epochsList,  f"Best_accuracy": single_arch.acc_hist,
-                                    f"Loss": single_arch.loss_hist,  f"Acc_mean": [np.mean(single_arch.acc_hist)]+empty_list,
-                                    f"Loss_mean": [np.mean(single_arch.loss_hist)]+empty_list
-                                })
-            path_report = os.path.join(path_results, f'{self.filename}_MEDIAN.csv')
-        else:
-            empty_list = ['']*(len(execList)-1)
-            data = pd.DataFrame({   f"Execution":execList,  f"Best_accuracy": self.best_acc_list,
-                                    f"Loss": self.loss_list,  f'CPU_hrs':self.cpu_hours_list,
-                                    f'Num_params':self.num_params_list, f'FLOPs':self.flops_list,
-                                    f"Acc_mean": [np.mean(self.best_acc_list)]+empty_list, f"Loss_mean": [np.mean(self.loss_list)]+empty_list,
-                                    f'CPU_hrs_mean':[np.mean(self.cpu_hours_list)]+empty_list, f'Num_params_mean':[np.mean(self.num_params_list)]+empty_list,
-                                    f'FLOPs_mean':[np.mean(self.flops_list)]+empty_list, f"Acc_std": [np.std(self.best_acc_list)]+empty_list,
-                                    f"Loss_std": [np.std(self.loss_list)]+empty_list, f'CPU_hrs_std':[np.std(self.cpu_hours_list)]+empty_list,
-                                    f'Num_params_std':[np.std(self.num_params_list)]+empty_list, f'FLOPs_std':[np.std(self.flops_list)]+empty_list
-                                })
-
-            path_report = os.path.join(path_results, f'{self.filename}.csv')
-        print(f'Report saved in {path_report}')
-        data.to_csv(path_report, index=False)
 
     def change_layer_parameters_or_type(self, arch_obj_ind, mutation_type):
         #gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':2}, {'CONV':[64,3]}, {'POOLMAX':2}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
@@ -95,12 +72,33 @@ class TECNAS:
     def mutate_children(self, mutation_type):
         for i in range(len(self.children)):
             mutated_child = self.change_layer_parameters_or_type(self.children[i], mutation_type)
+            mutated_child.isChild = True
+            mutated_child.before_mutation = self.children[i]
+            mutated_child.parent1 = self.children[i].parent1
+            mutated_child.parent2 = self.children[i].parent2
+            if mutated_child.parent1 == None or mutated_child.parent1 == []:
+                mutated_child.dP1 = 99999
+            else:
+                mutated_child.dP1 = hamming_distance(mutated_child.integer_encoding, mutated_child.parent1.integer_encoding)
+            if mutated_child.parent2 == None or mutated_child.parent2 == []:
+                mutated_child.dP2 = 99999
+            else:
+                mutated_child.dP2 = hamming_distance(mutated_child.integer_encoding, mutated_child.parent2.integer_encoding)
+            if mutated_child.before_mutation == None or mutated_child.before_mutation == []:
+                mutated_child.dBM = 99999
+            else:
+                mutated_child.dBM = hamming_distance(mutated_child.integer_encoding, mutated_child.before_mutation.integer_encoding)
+        
+            self.train_model(mutated_child)
             self.children[i] = mutated_child
 
     def crossover(self, arch_obj1, arch_obj2):
         crossover_obj = Crossover()
-        child1_layers_list, child2_layers_list = crossover_obj.single_point_crossover(arch_obj1, arch_obj2)
-        return child1_layers_list, child2_layers_list
+        #Check what kind of crossover is being used
+        child1_arch, child2_arch = crossover_obj.single_point_crossover(arch_obj1, arch_obj2)
+        child1_arch.isChild = True
+        child2_arch.isChild = True
+        return child1_arch, child2_arch
 
     def random_parent_selection(self):
         return random.sample(self.pop, 2)
@@ -117,9 +115,16 @@ class TECNAS:
             for _ in range(self.NPOP//2): #//2 because you add two children
                 parent1, parent2 = self.random_parent_selection()
                 child1, child2 = self.crossover(parent1, parent2)
-                self.children.append(child1)
-                self.children.append(child2)
-
+                child1.parent1 = parent1
+                child1.parent2 = parent2
+                self.train_model(parent1)
+                self.train_model(parent2)
+                self.train_model(child1)
+                self.train_model(child2)
+                
+            self.children.append(child1)
+            self.children.append(child2)
+                
     def create_model(self, arch_obj):
         layers_list = arch_obj.decode()
         model = models.Sequential(layers_list)
@@ -146,12 +151,18 @@ class TECNAS:
         return arch_obj
 
     def train_model(self, arch_obj):
+        reporter = ReportENAS()
+        if TRAIN == False:
+            print('Saving non trained architecture')
+            reporter.save_arch_info(arch_obj)
+            return 
+
         # Normalize the images to [0, 1] range
         x_train, x_test = self.x_train / 255.0, self.x_test / 255.0
         y_train, y_test = self.y_train, self.y_test
         # Expand the dimensions to include the channel (since MNIST is grayscale, we have a single channel)
-        x_train = x_train[..., tf.newaxis]
-        x_test = x_test[..., tf.newaxis]
+        #x_train = x_train[..., tf.newaxis]
+        #x_test = x_test[..., tf.newaxis]
 
         success = False
         max_attempts = 5  # Maximum number of retries
@@ -189,7 +200,7 @@ class TECNAS:
             finally:
                 attempts += 1
 
-        if not success:
+        if not success: #Change this so two parents are selected instead
             print("New architecture generated.")
             arch_obj = self.random_individual()  # Generate a new architecture for unexpected errors
             model = self.create_model(arch_obj)
@@ -223,6 +234,7 @@ class TECNAS:
         arch_obj.cpu_hours = training_time_hours            # Training time in CPU-hours
         arch_obj.num_params = total_params                  # Total number of model parameters
         arch_obj.flops = calculate_model_flops(model)
+        reporter.save_arch_info(arch_obj)
 
     def ENAS(self):
         ast = 50*'+'
@@ -259,10 +271,12 @@ class TECNAS:
         median_arch, idx = find_median(self.best_archs)
         print('\nMedian architecture is: ')
         print(median_arch)
-        self.create_report(reporting_single_arch = True, single_arch = median_arch)
-        self.create_report(reporting_single_arch = False)
-        self.plot_accuracy_loss_histories('L')
-        self.plot_accuracy_loss_histories('A')
+        #self.create_report(reporting_single_arch = True, single_arch = median_arch)  #CHANGE THIS ============================================
+        #self.create_report(reporting_single_arch = False)
+        if PLOT == True:
+            plotter = PlotterENAS(self)
+            plotter.plot_accuracy_loss_histories('L')
+            plotter.plot_accuracy_loss_histories('A')
 
     def initialize_pop(self):
         self.pop = []

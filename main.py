@@ -54,8 +54,6 @@ tecNAS.ENAS()
 
 random.seed(42)
 tecNAS = TECNAS()
-print('Hola')
-if RUN_ENAS == True:
-    tecNAS.ENAS()
+tecNAS.ENAS()
 
 #gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':[-1,2]}, {'CONV':[64,3]}, {'POOLMAX':[-1,2]}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]

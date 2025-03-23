@@ -1,16 +1,13 @@
 from globalsENAS import *
+from utilitiesENAS import *
 """# Mutator classs"""
 
 #This class mutates each layer randomly. CONV, POOLMAX, DENSE, etc
 #gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':[-1,2]}, {'CONV':[64,3]}, {'POOLMAX':[-1,2]}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
 class Mutator:
-    #layer_types = ['INP', 'CONV', 'POOLMAX', 'FLATTEN', 'DENSE']
-    #MINMAX_LAYERS = [3,20]
-    #CONV_KERN = [3,5,7]
-    #POOL_KERN = [2,3]
-    #NUM_FILTERS = [5,10]#[3,256]
-    #DENSE_NEURONS = [16,256]
     def mutate_layer_type(self, gen_obj, layer_idx):
+        #'L_MODIFY_PARAMS'
+
         #This function changes layers types (CONV to POOL, or POOL to CONV)
         #Returns the new layer that will replace the current one and also the layer type, if it were needed
         self.layer_idx = layer_idx
@@ -32,6 +29,7 @@ class Mutator:
         return temp_genotype.gen_list[self.layer_idx], layer_type
 
     def mutate_layer_parameters(self, gen_obj, layer_idx): #Adapt this for more representations
+        #'L_MODIFY_PARAMS'
         #Returns the specific layer that mutated (the dictionary)
         #Returns the new layer that will replace the current one and also the layer type, if it were needed
 
