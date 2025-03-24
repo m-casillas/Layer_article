@@ -19,6 +19,7 @@ import time
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import copy
 
 """# TECNAS Classs"""
 
@@ -56,7 +57,6 @@ class TECNAS:
         else:
             print(f'ERROR: {mutation_type} Mutation type not recognized')
             mutation_function = None
-
         for layer_idx in layers_indexes:
             if random.random() < self.MUT_PROB:
                 mutated_layer, layer_type = mutation_function(arch_obj_ind.genotype, layer_idx)
@@ -67,49 +67,53 @@ class TECNAS:
                     mutated_layer[layer_type] = mutated_layer.pop(old_layer_type)
                 arch_obj_ind.genotype.gen_list[layer_idx] = mutated_layer
                 arch_obj_ind.set_genotype(arch_obj_ind.genotype)
+        
         return arch_obj_ind
 
     def mutate_children(self, mutation_type):
+        if self.search_strategy == 'RANDOM':
+            return
+        
         for i in range(len(self.children)):
+            temp_child = copy.deepcopy(self.children[i])
+            name_before_mut = self.children[i].idx
             mutated_child = self.change_layer_parameters_or_type(self.children[i], mutation_type)
             mutated_child.isChild = True
-            mutated_child.before_mutation = self.children[i]
-            mutated_child.parent1 = self.children[i].parent1
-            mutated_child.parent2 = self.children[i].parent2
-            if mutated_child.parent1 == None or mutated_child.parent1 == []:
-                mutated_child.dP1 = 99999
-            else:
-                mutated_child.dP1 = hamming_distance(mutated_child.integer_encoding, mutated_child.parent1.integer_encoding)
-            if mutated_child.parent2 == None or mutated_child.parent2 == []:
-                mutated_child.dP2 = 99999
-            else:
-                mutated_child.dP2 = hamming_distance(mutated_child.integer_encoding, mutated_child.parent2.integer_encoding)
-            if mutated_child.before_mutation == None or mutated_child.before_mutation == []:
-                mutated_child.dBM = 99999
-            else:
-                mutated_child.dBM = hamming_distance(mutated_child.integer_encoding, mutated_child.before_mutation.integer_encoding)
-        
-            self.train_model(mutated_child)
+            mutated_child.idx = str(name_before_mut) + '[M]' #Add M to the index to indicate it was mutated
+            mutated_child.before_mutation = temp_child
+            mutated_child.parent1 = temp_child.parent1
+            mutated_child.parent2 = temp_child.parent2
+            mutated_child.integer_encoding = mutated_child.genList_to_integer_vector()
+            calculate_all_hamming_distances(mutated_child, mutated = True)
+            self.train_model(mutated_child)           
             self.children[i] = mutated_child
-
+            
+            
     def crossover(self, arch_obj1, arch_obj2):
         crossover_obj = Crossover()
         #Check what kind of crossover is being used
         child1_arch, child2_arch = crossover_obj.single_point_crossover(arch_obj1, arch_obj2)
         child1_arch.isChild = True
         child2_arch.isChild = True
+        child1_arch.integer_encoding = child1_arch.genList_to_integer_vector()
+        child2_arch.integer_encoding = child2_arch.genList_to_integer_vector()
         return child1_arch, child2_arch
 
     def random_parent_selection(self):
-        return random.sample(self.pop, 2)
+        [p1, p2] = random.sample(self.pop, 2)
+        p1.isChild = False
+        p2.isChild = False
+        return [p1, p2]
 
     def generate_offspring(self):
+        reporter = ReportENAS()
         #Use Crossover or Random search
         self.children = []
         if self.search_strategy == 'RANDOM':
             print(f'RANDOM SEARCH STRATEGY')
-            for _ in range(self.NPOP):
+            for i in range(self.NPOP):
                 self.children.append(self.random_individual())
+                                
         elif self.search_strategy == 'GA':
             print(f'GA SEARCH STRATEGY')
             for _ in range(self.NPOP//2): #//2 because you add two children
@@ -117,13 +121,16 @@ class TECNAS:
                 child1, child2 = self.crossover(parent1, parent2)
                 child1.parent1 = parent1
                 child1.parent2 = parent2
+                child2.parent1 = parent1
+                child2.parent2 = parent2
+                calculate_all_hamming_distances(child1)
+                calculate_all_hamming_distances(child2)
                 self.train_model(parent1)
                 self.train_model(parent2)
                 self.train_model(child1)
                 self.train_model(child2)
-                
-            self.children.append(child1)
-            self.children.append(child2)
+                self.children.append(child1)
+                self.children.append(child2)
                 
     def create_model(self, arch_obj):
         layers_list = arch_obj.decode()
@@ -132,7 +139,6 @@ class TECNAS:
 
     def random_individual(self):
         # TODO: Add more representations and encodings.
-        
         gen_list = [
                     {'INP':INPUT_SIZE},
                     create_conv_layer(),
@@ -143,11 +149,9 @@ class TECNAS:
                     create_dense_layer(),
                     create_dense_layer(10, 'softmax')
                 ]
-
         genotype = Genotype('L', 'IV', gen_list)
-        idx = random.randint(0,1000)
+        idx = random.choice(ARCH_NAMES_LIST)
         arch_obj = LayerRepresentation('S', str(idx), genotype)
-    
         return arch_obj
 
     def train_model(self, arch_obj):
@@ -296,10 +300,22 @@ class TECNAS:
         #Load a portion of the dataset, given by DATASET_PART
         (self.x_train, self.y_train), (self.x_test, self.y_test) = datasets.cifar10.load_data()
         total_train_samples = self.x_train.shape[0]
+        if DATASET_PART == 1:
+            # Use the whole dataset
+            middle_start = 0
+            middle_end = total_train_samples
+        else:
+            # Use a subset of the dataset
+            middle_start = total_train_samples // DATASET_PART
+            middle_end = 3 * total_train_samples // DATASET_PART
+        '''
+        (self.x_train, self.y_train), (self.x_test, self.y_test) = datasets.cifar10.load_data()
+        total_train_samples = self.x_train.shape[0]
         middle_start = total_train_samples // DATASET_PART
         middle_end = 3 * total_train_samples // DATASET_PART
         self.x_train = self.x_train[middle_start:middle_end]
-        self.y_train = self.y_train[middle_start:middle_end]
+        self.y_train = self.y_train[middle_start:middle_end]'
+        '''
 
         self.report_columns = ["Best_accuracy", "Loss", "CPU_hrs", "Num_params", "FLOPs",
                    "Acc_mean", "Loss_mean", "CPU_hrs_mean", "Num_params_mean",

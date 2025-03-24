@@ -82,3 +82,19 @@ def hamming_distance(str1, str2):
         print("Vectors must be of the same length")
         return None
     return sum(c1 != c2 for c1, c2 in zip(str1, str2))
+
+def calculate_all_hamming_distances(arch_obj, mutated = False):
+    #Mutated is used to check if the architecture was mutated or not. If it was, calculate the hamming distance between itself and the architecture before mutation.
+    arch_obj.dP1 = hamming_distance(arch_obj.integer_encoding, arch_obj.parent1.integer_encoding)
+    arch_obj.dP2 = hamming_distance(arch_obj.integer_encoding, arch_obj.parent2.integer_encoding)
+    if mutated == True:
+        arch_obj.dBM = hamming_distance(arch_obj.integer_encoding, arch_obj.before_mutation.integer_encoding)
+      
+         
+
+def is_None_or_empty(object):
+    #Check if an object is None or empty
+    if object == None or object == []:
+        return True
+    return False
+

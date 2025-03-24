@@ -2,37 +2,31 @@ import pandas as pd
 import numpy as np
 from globalsENAS import *
 from configENAS import *
+from utilitiesENAS import *
 #from TECNAS import *
 
 class ReportENAS:
     def save_arch_info(self, arch):
-
-        '''
+        if REPORT_ARCH == False:
+            print('REPORT_ARCH is False. No information will be saved.')
+            return
+        
+        #FIX THIS TO CHECK IF ITS CHILD OR NOT
         if arch.isChild == True:
             parent1_integer_encoding = arch.parent1.integer_encoding
             parent2_integer_encoding = arch.parent2.integer_encoding
-            before_mutation_integer_encoding = arch.before_mutation.integer_encoding
+            if is_None_or_empty(arch.before_mutation) == False:
+                before_mutation_integer_encoding = arch.before_mutation.integer_encoding
+            else:
+                before_mutation_integer_encoding = []
         else:
             parent1_integer_encoding = []
             parent2_integer_encoding = []
-            before_mutation_integer_encoding = []'
-        '''
-
-        if arch.parent1 == None or arch.parent1 == []:
-            parent1_integer_encoding = []
-        else:
-            parent1_integer_encoding = arch.parent1.integer_encoding
-        if arch.parent2 == None or arch.parent2 == []:
-            parent2_integer_encoding = []
-        else:
-            parent2_integer_encoding = arch.parent2.integer_encoding
-        if arch.before_mutation == None or arch.before_mutation == []:
             before_mutation_integer_encoding = []
-        else:
-            before_mutation_integer_encoding = arch.before_mutation.integer_encoding
         
-        data_arch = pd.DataFrame({
-            'ID': [arch.idx], 
+        data_arch = pd.DataFrame(
+            {'ID': [arch.idx], 
+            'isChild': [arch.isChild],
             'Integer_encoding': [str(arch.integer_encoding)],
             'Genotype': [arch.genoStr], 
             'Mutation type': [mutation_type],
@@ -49,15 +43,14 @@ class ReportENAS:
             'Before Mutation': [before_mutation_integer_encoding],
             'HD_P1': [arch.dP1],
             'HD_P2': [arch.dP2],
-            'HD_BM': [arch.dBM]
-        })
+            'HD_BM': [arch.dBM]}
+        )
         path_report = os.path.join(path_results, 'architectures.csv')
-        print(path_report)
         #Check if the file exists to add the headers or not.
         file_exists = os.path.exists(path_report)
 
         data_arch.to_csv(path_report, mode='a', index=False, header=not file_exists)
-        print(f'Architecture info saved to {path_report}')
+        #print(f'Architecture info saved to {path_report}')
 
 
     def create_report(self, reporting_single_arch = False, single_arch = None):

@@ -1,8 +1,16 @@
 import os 
+import itertools
 
 def list_to_dictionary(list1):
      return {i:value for i,value in enumerate(list1)}
      
+def generate_letter_list():
+    #Generate letters from A to ZZZZ, for the architecture idx
+    letters = []
+    for length in range(1, 3):  # Generate from length 1 to 4
+        for combo in itertools.product("ABCDEFGHIJKLMNOPQRSTUVWXYZ", repeat=length):
+            letters.append("".join(combo))
+    return letters
 
 path =  os.getcwd()  #'/content/drive/MyDrive/DCC/Research/First_article'
 dir_results = 'final_project_results'
@@ -22,6 +30,17 @@ DENSE_NEURONS_LIST = [10, 16, 32, 64, 128, 256]
 ACTIVATION_FUNCTIONS_LIST = ['relu', 'sigmoid', 'tanh', 'softmax']
 LAYERS_TYPES_LIST = ['CONV', 'POOLMAX', 'DENSE']
 
+'''
+CONV_KERNEL_LIST = list(range(258,300))
+POOL_KERN_LIST = list(range(258,300))
+NUM_FILTERS_LIST = list(range(258,300))
+DENSE_NEURONS_LIST = list(range(258,300))'
+ACTIVATION_FUNCTIONS_LIST += ['relu', 'sigmoid', 'tanh', 'softmax', 'elu', 'selu', 'softplus', 'softsign', 'exponential', 'linear']
+'''
+
+
+LAYERS_TYPES_LIST = ['CONV', 'POOLMAX', 'DENSE']
+
 #Each parameter is encoded as an integer for the genetic operators
 CONV_KERNELS = list_to_dictionary(CONV_KERNEL_LIST)
 POOL_KERNELS = list_to_dictionary(POOL_KERN_LIST)
@@ -31,4 +50,7 @@ DENSE_NEURONS = list_to_dictionary(DENSE_NEURONS_LIST)
 ACTIVATION_FUNCTIONS = list_to_dictionary(ACTIVATION_FUNCTIONS_LIST)
 LAYERS_TYPES = list_to_dictionary(LAYERS_TYPES_LIST)
 
-#gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':[-1,2]}, {'CONV':[64,3]}, {'POOLMAX':[-1,2]}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
+ARCH_NAMES_LIST = generate_letter_list()
+
+
+

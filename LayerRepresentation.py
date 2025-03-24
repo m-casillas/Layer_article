@@ -99,4 +99,15 @@ class LayerRepresentation(Architecture):
     
     def __init__(self, arch_type = 'S', idx = 9999, genotype = None):
         super().__init__(arch_type, idx, genotype)
-        self.integer_encoding = self.genList_to_integer_vector()
+        if is_None_or_empty(genotype):
+            self.integer_encoding = []
+        else:
+            self.integer_encoding = self.genList_to_integer_vector()
+
+
+from Genotype import *
+#gen_list = [{'INP': 32}, {'CONV': [9767, 2791]}, {'POOLMAX': [-1, 7634]}, {'CONV': [3594, 6162]}, {'POOLMAX': [-1, 5835]}, {'FLATTEN': None}, {'DENSE': [562, 'relu']}, {'DENSE': [10, 'softmax']}]
+#genotype = Genotype('L', 0, gen_list)
+#lrobj = LayerRepresentation(genotype=genotype)
+#print(lrobj)
+#print(lrobj.integer_encoding)

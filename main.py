@@ -1,17 +1,9 @@
 #gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':[-1,2]}, {'CONV':[64,3]}, {'POOLMAX':[-1,2]}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
 
 
-'''
-# TODO:
-
-*   Implement binary encoding.
-*   Save architectures information with corresponding PIs into files.
-*   Implement Wilcoxon Test.
-
-# CONSIDERATIONS:
-* Binary and integer encodings will somehow be the same. How can I make the GOs different?
-* What test should I use to find or not significant differences through different procedures? (Like ANOVA, but non-parametric)
-'''
+#If mutation gives the same architecture, try another mutation
+#Save epochs into architectures.csv
+#Save the best architectures in other file. architectures.csv is for the surrogate model
 
 import random
 import pandas as pd
@@ -52,7 +44,7 @@ tecNAS.ENAS()
 
 """#MAIN"""
 
-random.seed(42)
+#random.seed(42)
 tecNAS = TECNAS()
 tecNAS.ENAS()
 

@@ -14,6 +14,7 @@ class Mutator:
         layer_mutated = gen_obj.gen_list[self.layer_idx]
         layer_type = list(layer_mutated.keys())[0]
         temp_genotype = gen_obj #Remember, genotype objects have an attribute "gen_list": a list of dictionaries. Each dictionary is a layer
+        
         #Remember, create_pool_layer returns the dictionary.
         if layer_type == 'CONV':
             #Change it to a POOLMAX layer
@@ -26,6 +27,7 @@ class Mutator:
         else:
             print(f'ERROR: {layer_type} Layer type not recognized')
             temp_genotype.gen_list[self.layer_idx] = None
+        
         return temp_genotype.gen_list[self.layer_idx], layer_type
 
     def mutate_layer_parameters(self, gen_obj, layer_idx): #Adapt this for more representations
@@ -38,7 +40,7 @@ class Mutator:
         layer_type = list(layer_to_mutate.keys())[0]
         temp_genotype = gen_obj #Remember, genotype objects have an attribute "gen_list": a list of dictionaries. Each dictionary is a layer
         #Remember, create_pool_layer returns the dictionary. You only need the value, not the key "layer_type"
-
+        
         if layer_type == 'CONV':
             temp_genotype.gen_list[self.layer_idx][layer_type] = create_conv_layer()[layer_type]
         elif layer_type == 'POOLMAX':
@@ -48,6 +50,7 @@ class Mutator:
         else:
             print(f'ERROR: {layer_type} Layer type not recognized')
             temp_genotype.gen_list[self.layer_idx][layer_type] = None
+        
         return temp_genotype.gen_list[self.layer_idx], layer_type
     def __init__(self, ):
         #unit
