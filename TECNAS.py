@@ -6,7 +6,6 @@ from tensorflow.python.profiler.model_analyzer import profile
 from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
 from tensorflow.keras.layers import Input
 from globalsENAS import *
-from utilitiesENAS import *
 from configENAS import *
 from Genotype import *
 from ReportENAS import *
@@ -49,10 +48,10 @@ class TECNAS:
         mutator_obj = Mutator()
 
         if mutation_type == 'L_MODIFY_PARAMS':
-            layers_indexes = [1,2,3,4,6] #Only this indexes may change their parameters
+            layers_indexes = MUTABLE_LCHANGEPARAM_INDEXES #Only this indexes may change their parameters
             mutation_function = mutator_obj.mutate_layer_parameters
         elif mutation_type == 'L_CHANGE_TYPE':
-            layers_indexes = [1,2,3,4] #Only this indexes may change type
+            layers_indexes = MUTABLE_LCHANGETYPE_INDEXES #Only this indexes may change type
             mutation_function = mutator_obj.mutate_layer_type
         else:
             print(f'ERROR: {mutation_type} Mutation type not recognized')

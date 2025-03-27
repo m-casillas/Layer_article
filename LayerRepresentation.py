@@ -1,6 +1,5 @@
 from globalsENAS import *
 from Architecture import *
-from utilitiesENAS import *
 from tensorflow.keras import datasets, layers, models
 from tensorflow.keras.layers import Input
 

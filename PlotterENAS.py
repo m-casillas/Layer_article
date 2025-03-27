@@ -1,5 +1,4 @@
 from globalsENAS import *
-from utilitiesENAS import *
 from configENAS import *
 import numpy as np
 import time

@@ -17,7 +17,6 @@ from LayerRepresentation import *
 from Mutator import *
 from Crossover import *
 from TECNAS import *
-from utilitiesENAS import *
 from PlotterENAS import *
 from ReportENAS import *
 from globalsENAS import *
