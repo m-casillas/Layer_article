@@ -8,7 +8,7 @@ from LayerRepresentation import *
 #(more to be adapted)
 
 class Crossover:
-    def single_point_crossover(self, arch_obj1, arch_obj2, point = 3):
+    def single_point_crossover(self, arch_obj1, arch_obj2, point):
         self.parent1 = arch_obj1
         self.parent2 = arch_obj2
         #                  0             1              2                3                   4                    5                  6                    7
@@ -21,6 +21,7 @@ class Crossover:
         return child1_arch, child2_arch
 
     def two_point_crossover(self, arch_obj1, arch_obj2, point1 = 2, point2 = 5):
+        (point1, point2) = (point1, point2) if point1 < point2 else (point2, point1)
         self.parent1 = arch_obj1
         self.parent2 = arch_obj2
         gen_list_child1 = (self.parent1.genotype.gen_list[:point1] + self.parent2.genotype.gen_list[point1:point2] + self.parent1.genotype.gen_list[point2:])

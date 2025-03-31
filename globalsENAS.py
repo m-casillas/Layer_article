@@ -1,5 +1,15 @@
 import os 
 import itertools
+import tensorflow as tf
+import random
+from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2
+from tensorflow.keras import datasets, layers, models
+from tensorflow.keras import backend as K
+from tensorflow.python.profiler.model_analyzer import profile
+from tensorflow.python.profiler.option_builder import ProfileOptionBuilder
+from tensorflow.keras.layers import Input
+from datetime import datetime
+
 
 def list_to_dictionary(list1):
      return {i:value for i,value in enumerate(list1)}
@@ -59,7 +69,6 @@ def create_conv_layer(nf = None, ks = None):
 def create_dense_layer(nn = None, act = None):
         #A Dense layer has: Number of neurons (nn) and activation function (act)... more to come
         #If nn and act are None, it is randomly created
-        act = 'relu'
         if nn == None and act == None:
             nn = random.choice(list(DENSE_NEURONS.values())[1:]) #Ignore the first number (10), that's for the last layer
             act = 'relu'
@@ -90,9 +99,14 @@ def get_key_from_value(dictio, val):
 def hamming_distance(str1, str2):
     #Calculate the Hamming distance between two strings. 
     #It returns how many characters differ between two strings.
+    #-1 means the architecture doesnot have a hamming distance (i.e. a children and its mutation, if it didn't mutate)
+    #-2 means the vectors were not the same size.
     if len(str1) != len(str2):
-        print("Vectors must be of the same length")
-        return None
+        print('\nHamming distance error: Vectors must be of the same length')
+        print(f'{str1 = }')
+        print(f'{str2 = }')
+        print('====================================\n')
+        return -2
     return sum(c1 != c2 for c1, c2 in zip(str1, str2))
 
 def calculate_all_hamming_distances(arch_obj, mutated = False):
@@ -101,7 +115,6 @@ def calculate_all_hamming_distances(arch_obj, mutated = False):
     arch_obj.dP2 = hamming_distance(arch_obj.integer_encoding, arch_obj.parent2.integer_encoding)
     if mutated == True:
         arch_obj.dBM = hamming_distance(arch_obj.integer_encoding, arch_obj.before_mutation.integer_encoding)
-      
          
 def is_None_or_empty(object):
     #Check if an object is None or empty
@@ -115,14 +128,15 @@ def add_within_bounds(number, LB, UB):
         number = LB
     return number
 
-
 def select_type_filtering(lst, op_type):
     #Returns a random string from lst, excluding op_type.
     #Used for mutation by selecting an operation, excluding the current one.
     filtered_list = [item for item in lst if item != op_type]
     return random.choice(filtered_list) if filtered_list else None
 
-
+#                0              1                2               3            4                  5                 6                       7
+#gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':2}, {'CONV':[64,3]}, {'POOLMAX':2}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
+#               -8              -7               -6              -5           -4                 -3                -2                      -1
 
 path =  os.getcwd()  #'/content/drive/MyDrive/DCC/Research/First_article'
 dir_results = 'final_project_results'
@@ -130,28 +144,29 @@ fig_results = 'final_project_figures'
 path_results = os.path.join(path, dir_results)
 path_figures = os.path.join(path, fig_results)
 
-layer_types = ['INP', 'CONV', 'POOLMAX', 'POOLAVG', 'FLATTEN', 'DENSE']
-type_mutable_layers = ['CONV', 'POOLMAX', 'POOLAVG']
+#                        0      1         2        3            4        5
+layer_types_list =    ['INP', 'CONV', 'POOLMAX', 'POOLAVG', 'FLATTEN', 'DENSE']
+type_mutable_layers = ['CONV','POOLMAX','POOLAVG']
 create_layers_functions_dict = {'CONV':create_conv_layer, 'POOLMAX':create_pool_max_layer, 'POOLAVG':create_pool_avg_layer, 'DENSE':create_dense_layer}
 
-SIZE_GENLIST = 8
+ast = 50*'+'
+SIZE_GENLIST = 8 #INP CONV FLATTER AND LAST DENSE LAYER ARE 4 OF THIS SIZE
 INPUT_SIZE = 32
-MINMAX_LAYERS = [3,20]
-CONV_KERNEL_LIST = [3,5,7]
-POOL_KERN_LIST = [2,3]
-NUM_FILTERS_LIST = [64, 128, 256, 512]
-DENSE_NEURONS_LIST = [10, 16, 32, 64, 128, 256]
+BATCH_SIZE = 32
+#                     0    1    2    3   4    5
+MINMAX_LAYERS =      [3,   20]
+CONV_KERNEL_LIST =   [3,   5,   7]
+POOL_KERN_LIST =     [2,   3]
+NUM_FILTERS_LIST =   [64,  128, 256]
+DENSE_NEURONS_LIST = [10,   16,  32, 64, 128, 256]
 ACTIVATION_FUNCTIONS_LIST = ['relu', 'sigmoid', 'tanh', 'softmax']
 
-#                0              1                2               3            4                  5                 6                       7
-#gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':2}, {'CONV':[64,3]}, {'POOLMAX':2}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
-#               -8              -7               -6              -5           -4                 -3                -2                      -1
-
-#All layers can change parameters, except the first one, the FLATTER and the last DENSE layer
-MUTABLE_LCHANGEPARAM_INDEXES = list(range(1,SIZE_GENLIST-3)) + [SIZE_GENLIST-2]
+#All layers can change parameters, except the first two, the FLATTER and the last DENSE layer
+MUTABLE_LCHANGEPARAM_INDEXES = list(range(2,SIZE_GENLIST-3)) + [SIZE_GENLIST-2]
 #All layers can change type, except the first one, the FLATTER and the two last DENSE layers
 MUTABLE_LCHANGETYPE_INDEXES  = list(range(1,SIZE_GENLIST-3))
-
+#INDEXES FOR SPC
+SPC_INDEXES = list(range(2,SIZE_GENLIST-3 + 1))
 
 CONV_MINKERNEL_IND = 0
 CONV_MINFILTER_IND = 0
@@ -170,10 +185,13 @@ POOL_KERNELS = list_to_dictionary(POOL_KERN_LIST)
 NUM_FILTERS = list_to_dictionary (NUM_FILTERS_LIST)
 DENSE_NEURONS = list_to_dictionary(DENSE_NEURONS_LIST)
 ACTIVATION_FUNCTIONS = list_to_dictionary(ACTIVATION_FUNCTIONS_LIST)
-LAYERS_TYPES = list_to_dictionary(layer_types)
+LAYERS_TYPES = list_to_dictionary(layer_types_list)
 
 ARCH_NAMES_LIST = generate_letter_list()
 
+# Get current date and hour
+now = datetime.now()
+formatted_time = now.strftime("%Y-%m-%d_%H-%M")
+# Create filename
+architecture_csv_filename  = f"archs_{formatted_time}.csv"
 
-
-print(POOL_KERNELS)

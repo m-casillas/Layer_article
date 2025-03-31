@@ -22,6 +22,9 @@ class Architecture(ABC):
     def set_genotype(self, genotype):
         self.genotype = genotype #object of Genotype class
         self.genoStr = str(self.genotype.gen_list)
+
+    def set_genoStr(self):
+        self.genoStr = str(self.genotype.gen_list)
     
     def __init__(self, arch_type = 'S', idx = 9999, genotype = None):
         self.arch_type = 'S' # S: Sequential

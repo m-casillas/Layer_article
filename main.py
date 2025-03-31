@@ -1,8 +1,9 @@
 #gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':[-1,2]}, {'CONV':[64,3]}, {'POOLMAX':[-1,2]}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
 
-
+#MUTATION PARAMS  IS NOT WORKING. CHECK DICTIONARIES
+#CHECK CROSSOVER, CUTTTING POINT SHOULD CHANGE
+#LIMIT NUMBER OF POOLING LAYERS
 #If mutation gives the same architecture, try another mutation
-#Save epochs into architectures.csv
 #Save the best architectures in other file. architectures.csv is for the surrogate model
 
 import random
@@ -43,8 +44,12 @@ tecNAS.ENAS()
 
 """#MAIN"""
 
-#random.seed(42)
+
+print("Num GPUs Available:", len(tf.config.list_physical_devices('GPU')))
+print("GPU Details:", tf.config.list_physical_devices('GPU'))
+random.seed(1)
 tecNAS = TECNAS()
 tecNAS.ENAS()
+
 
 #gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':[-1,2]}, {'CONV':[64,3]}, {'POOLMAX':[-1,2]}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]

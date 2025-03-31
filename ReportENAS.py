@@ -29,9 +29,10 @@ class ReportENAS:
             'Integer_encoding': [str(arch.integer_encoding)],
             'Genotype': [arch.genoStr], 
             'Mutation type': [mutation_type],
-            'Crossover type': [crossover_type],
+            'Crossover type': [self.crossover_type],
             'Search strategy': [search_strategy],
             'Type': [arch.arch_type], 
+            'Epochs':[EPOCHS],
             'Accuracy': [arch.acc], 
             'Loss': [arch.loss], 
             'FLOPs': [arch.flops], 
@@ -44,12 +45,12 @@ class ReportENAS:
             'HD_P2': [arch.dP2],
             'HD_BM': [arch.dBM]}
         )
-        path_report = os.path.join(path_results, 'architectures.csv')
+        path_report = os.path.join(path_results, f'{architecture_csv_filename}')
         #Check if the file exists to add the headers or not.
         file_exists = os.path.exists(path_report)
 
         data_arch.to_csv(path_report, mode='a', index=False, header=not file_exists)
-        #print(f'Architecture info saved to {path_report}')
+        print(f'Architecture info saved to {path_report}')
 
 
     def create_report(self, reporting_single_arch = False, single_arch = None):
@@ -78,5 +79,5 @@ class ReportENAS:
             path_report = os.path.join(path_results, f'{self.filename}.csv')
         print(f'Report saved in {path_report}')
         data.to_csv(path_report, index=False)
-    def __init__(self):
-        pass
+    def __init__(self, crossover_type = 'None'):
+        self.crossover_type = crossover_type

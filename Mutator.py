@@ -45,13 +45,18 @@ class Mutator:
             temp_genotype.gen_list[self.layer_idx][layer_type] = create_conv_layer(nf,ks)[layer_type]
         elif layer_type == 'POOLMAX':
             ks = layer_to_mutate['POOLMAX'][1]
-            ks = add_within_bounds(ks, CONV_MINKERNEL_IND, CONV_MAXKERNEL_IND)
+            ks = add_within_bounds(ks, POOL_MINKERNEL_IND, POOL_MAXKERNEL_IND)
             temp_genotype.gen_list[self.layer_idx][layer_type] = create_pool_max_layer(ks)[layer_type]
+        elif layer_type == 'POOLAVG':
+            ks = layer_to_mutate['POOLAVG'][1]
+            ks = add_within_bounds(ks, POOL_MINKERNEL_IND, POOL_MAXKERNEL_IND)
+            temp_genotype.gen_list[self.layer_idx][layer_type] = create_pool_avg_layer(ks)[layer_type]
         elif layer_type == 'DENSE':
             nn = layer_to_mutate['DENSE'][0]
+            nn = add_within_bounds(nn, DENSE_MINNEURONS_IND, DENSE_MAXNEURONS_IND)
             temp_genotype.gen_list[self.layer_idx][layer_type] = create_dense_layer(nn)[layer_type]
         else:
-            print(f'ERROR: {layer_type} Layer type not recognized')
+            print(f'ERROR: {layer_type} Layer type not recognized (mutate_later_parameters)')
             temp_genotype.gen_list[self.layer_idx][layer_type] = None
         
         return temp_genotype.gen_list[self.layer_idx], layer_type
@@ -60,11 +65,5 @@ class Mutator:
         self.arch_obj = None
         self.layer_idx = 9999
 
-from Genotype import *
-from LayerRepresentation import *
-gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':[-1,2]}, {'CONV':[64,3]}, {'POOLMAX':[-1,2]}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
-gen = Genotype('L', 'I', gen_list)
-arch = LayerRepresentation('S', 0, gen)
-print(arch.genoStr)
-mut = Mutator()
-print(mut.mutate_layer_type(gen, 1))
+
+

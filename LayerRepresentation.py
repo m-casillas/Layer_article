@@ -16,7 +16,7 @@ class LayerRepresentation(Architecture):
         for dictio in self.genotype.gen_list:
             for layer_type in dictio.keys():
                 layer_type_int = get_key_from_value(LAYERS_TYPES, layer_type)
-                if layer_type == 'INP':
+                if layer_type in ['INP', 'FLATTEN'] :
                     continue
                 elif layer_type == 'CONV':
                     integer_vector.append(layer_type_int)
@@ -30,14 +30,21 @@ class LayerRepresentation(Architecture):
                     integer_vector.append(nf)
                     ks = get_key_from_value(POOL_KERNELS, dictio[layer_type][1])
                     integer_vector.append(ks)
-                elif layer_type == 'FLATTEN':
-                    continue
+                elif layer_type == 'POOLAVG':
+                    integer_vector.append(layer_type_int)
+                    nf = -1 #This must be -1
+                    integer_vector.append(nf)
+                    ks = get_key_from_value(POOL_KERNELS, dictio[layer_type][1])
+                    integer_vector.append(ks)
                 elif layer_type == 'DENSE':
                     integer_vector.append(layer_type_int)
                     nn = get_key_from_value(DENSE_NEURONS, dictio[layer_type][0])
                     integer_vector.append(nn)
                     act = get_key_from_value(ACTIVATION_FUNCTIONS, dictio[layer_type][1])
                     integer_vector.append(act)
+                else:
+                    print('genList_to_integer_vector: Unidentified layer.')
+                    integer_vector.append(-9)
         return integer_vector
     
     def integer_vector_to_genList(self, integer_vector):
@@ -55,6 +62,10 @@ class LayerRepresentation(Architecture):
                 nf = -1
                 ks = list(POOL_KERNELS.values())[integer_vector[i+2]]
                 gen_list.append({'POOLMAX':[nf, ks]})
+            elif layer_type == 'POOLAVG':
+                nf = -1
+                ks = list(POOL_KERNELS.values())[integer_vector[i+2]]
+                gen_list.append({'POOLAVG':[nf, ks]})
             elif layer_type == 'FLATTEN':
                 continue
             elif layer_type == 'DENSE':
@@ -102,11 +113,3 @@ class LayerRepresentation(Architecture):
             self.integer_encoding = []
         else:
             self.integer_encoding = self.genList_to_integer_vector()
-
-
-from Genotype import *
-#gen_list = [{'INP': 32}, {'CONV': [9767, 2791]}, {'POOLMAX': [-1, 7634]}, {'CONV': [3594, 6162]}, {'POOLMAX': [-1, 5835]}, {'FLATTEN': None}, {'DENSE': [562, 'relu']}, {'DENSE': [10, 'softmax']}]
-#genotype = Genotype('L', 0, gen_list)
-#lrobj = LayerRepresentation(genotype=genotype)
-#print(lrobj)
-#print(lrobj.integer_encoding)
