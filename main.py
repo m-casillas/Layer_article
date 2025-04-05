@@ -1,11 +1,12 @@
 #gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':[-1,2]}, {'CONV':[64,3]}, {'POOLMAX':[-1,2]}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
 
-#MUTATION PARAMS  IS NOT WORKING. CHECK DICTIONARIES
-#CHECK CROSSOVER, CUTTTING POINT SHOULD CHANGE
+#CHECK THE TOTAL ARCHS COUNT
+#Add the succesfulCross and mut counters!
 #LIMIT NUMBER OF POOLING LAYERS
-#If mutation gives the same architecture, try another mutation
 #Save the best architectures in other file. architectures.csv is for the surrogate model
 
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import random
 import pandas as pd
 import numpy as np
@@ -43,13 +44,26 @@ tecNAS.ENAS()
 '''
 
 """#MAIN"""
-
+os.system("cls")
+print(f'{tf.__version__=}')
+tf.get_logger().setLevel('ERROR')
 
 print("Num GPUs Available:", len(tf.config.list_physical_devices('GPU')))
 print("GPU Details:", tf.config.list_physical_devices('GPU'))
-random.seed(1)
 tecNAS = TECNAS()
 tecNAS.ENAS()
 
-
-#gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':[-1,2]}, {'CONV':[64,3]}, {'POOLMAX':[-1,2]}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
+'''
+gen_list = [{'INP':28}, {'CONV':[256,7]}, {'POOLMAX':[-1,2]}, {'CONV':[64,3]}, {'POOLAVG':[-1,3]}, {'FLATTEN':None}, {'DENSE':[256,'relu']}, {'DENSE':[10,'softmax']}]
+gen_obj = Genotype('X','X',gen_list)
+arch_obj = LayerRepresentation('S', 0, gen_obj)
+idx = 6
+print(arch_obj.genotype.gen_list)
+print()
+mut = Mutator()
+print(arch_obj.genotype.gen_list[idx])
+arch_obj.genotype.gen_list[idx], ltype = mut.mutate_layer_parameters(arch_obj.genotype, idx)
+print(arch_obj.genotype.gen_list[idx])
+print()
+print(arch_obj.genotype.gen_list)
+'''

@@ -17,7 +17,7 @@ def list_to_dictionary(list1):
 def generate_letter_list():
     #Generate letters from A to ZZZZ, for the architecture idx
     letters = []
-    for length in range(1, 3):  # Generate from length 1 to 4
+    for length in range(1, 5):  # Generate from length 1 to 4
         for combo in itertools.product("ABCDEFGHIJKLMNOPQRSTUVWXYZ", repeat=length):
             letters.append("".join(combo))
     return letters
@@ -97,7 +97,7 @@ def get_key_from_value(dictio, val):
     return key
 
 def hamming_distance(str1, str2):
-    #Calculate the Hamming distance between two strings. 
+    #Calculate the Hamming distance between two strings. (integer, binary vectors, etc.)
     #It returns how many characters differ between two strings.
     #-1 means the architecture doesnot have a hamming distance (i.e. a children and its mutation, if it didn't mutate)
     #-2 means the vectors were not the same size.
@@ -111,10 +111,15 @@ def hamming_distance(str1, str2):
 
 def calculate_all_hamming_distances(arch_obj, mutated = False):
     #Mutated is used to check if the architecture was mutated or not. If it was, calculate the hamming distance between itself and the architecture before mutation.
-    arch_obj.dP1 = hamming_distance(arch_obj.integer_encoding, arch_obj.parent1.integer_encoding)
-    arch_obj.dP2 = hamming_distance(arch_obj.integer_encoding, arch_obj.parent2.integer_encoding)
+    
     if mutated == True:
+        arch_obj.dP1 = -1
+        arch_obj.dP2 = -1
         arch_obj.dBM = hamming_distance(arch_obj.integer_encoding, arch_obj.before_mutation.integer_encoding)
+    else:
+        arch_obj.dP1 = hamming_distance(arch_obj.integer_encoding, arch_obj.parent1.integer_encoding)
+        arch_obj.dP2 = hamming_distance(arch_obj.integer_encoding, arch_obj.parent2.integer_encoding)
+
          
 def is_None_or_empty(object):
     #Check if an object is None or empty
@@ -122,7 +127,7 @@ def is_None_or_empty(object):
         return True
     return False
 
-def add_within_bounds(number, LB, UB):
+def check_within_bounds(number, LB, UB):
     #Used for keeping indexes that are going to change within the bounds
     if number > UB:
         number = LB
@@ -133,6 +138,7 @@ def select_type_filtering(lst, op_type):
     #Used for mutation by selecting an operation, excluding the current one.
     filtered_list = [item for item in lst if item != op_type]
     return random.choice(filtered_list) if filtered_list else None
+
 
 #                0              1                2               3            4                  5                 6                       7
 #gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':2}, {'CONV':[64,3]}, {'POOLMAX':2}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
@@ -146,39 +152,51 @@ path_figures = os.path.join(path, fig_results)
 
 #                        0      1         2        3            4        5
 layer_types_list =    ['INP', 'CONV', 'POOLMAX', 'POOLAVG', 'FLATTEN', 'DENSE']
-type_mutable_layers = ['CONV','POOLMAX','POOLAVG']
+type_mutable_layers = ['CONV','POOLMAX']#,'POOLAVG']
 create_layers_functions_dict = {'CONV':create_conv_layer, 'POOLMAX':create_pool_max_layer, 'POOLAVG':create_pool_avg_layer, 'DENSE':create_dense_layer}
 
 ast = 50*'+'
-SIZE_GENLIST = 8 #INP CONV FLATTER AND LAST DENSE LAYER ARE 4 OF THIS SIZE
+SIZE_GENLIST = 12 #FIXED LAYERS LIKE INP CONV ... MAXPOOL FLATTEN DENSE DENSE DENSE(10) ARE PART OF THESE
+NUM_FIXED_LAYERS = 7 
 INPUT_SIZE = 32
-BATCH_SIZE = 32
+BATCH_SIZE = 64
+
+#Possible values for different hyperparameters =====================
 #                     0    1    2    3   4    5
 MINMAX_LAYERS =      [3,   20]
-CONV_KERNEL_LIST =   [3,   5,   7]
+CONV_KERNEL_LIST =   [3,   5]
 POOL_KERN_LIST =     [2,   3]
-NUM_FILTERS_LIST =   [64,  128, 256]
-DENSE_NEURONS_LIST = [10,   16,  32, 64, 128, 256]
+NUM_FILTERS_LIST =   [32, 64,  128, 256]
+DENSE_NEURONS_LIST = [10, 128, 256, 512]
 ACTIVATION_FUNCTIONS_LIST = ['relu', 'sigmoid', 'tanh', 'softmax']
+#==================================================================
 
-#All layers can change parameters, except the first two, the FLATTER and the last DENSE layer
-MUTABLE_LCHANGEPARAM_INDEXES = list(range(2,SIZE_GENLIST-3)) + [SIZE_GENLIST-2]
-#All layers can change type, except the first one, the FLATTER and the two last DENSE layers
-MUTABLE_LCHANGETYPE_INDEXES  = list(range(1,SIZE_GENLIST-3))
-#INDEXES FOR SPC
-SPC_INDEXES = list(range(2,SIZE_GENLIST-3 + 1))
+#Set what layers in the gen_list may undergo changes.===========================================================
+#All layers can change parameters, except the first two, the last POOL, FLATTEN and the last DENSE layer
+MUTABLE_LCHANGEPARAM_INDEXES = list(range(2,SIZE_GENLIST-6+1)) + [SIZE_GENLIST-3]
+#All layers can change type, except the first one, the FLATTEN and the two last DENSE layers
+#MUTABLE_LCHANGETYPE_INDEXES  = list(range(1,SIZE_GENLIST-3))
+MUTABLE_LCHANGETYPE_INDEXES  = list(range(2,SIZE_GENLIST-6+1)) + [SIZE_GENLIST-3]
+#INDEXES FOR CROSSOVER
+SPC_INDEXES = list(range(2,SIZE_GENLIST-6 + 2))
+#==============================================================================================================
 
+#Set the minimum and maximum INDEX for the hyperparameters. This is used for mutation (indexes are added) =====
 CONV_MINKERNEL_IND = 0
 CONV_MINFILTER_IND = 0
 POOL_MINKERNEL_IND = 0
-DENSE_MINNEURONS_IND = 1
+DENSE_MINNEURONS_IND = 1 #Because the first one is 10, and it's used for the last DENSE layer.
 ACTIVATION_MIN_IND = 0
 CONV_MAXKERNEL_IND = len(CONV_KERNEL_LIST)-1
 CONV_MAXFILTER_IND = len(NUM_FILTERS_LIST)-1
 POOL_MAXKERNEL_IND = len(POOL_KERN_LIST)-1
 DENSE_MAXNEURONS_IND = len(DENSE_NEURONS_LIST)-1
 ACTIVATION_MAX_IND = len(ACTIVATION_FUNCTIONS_LIST)-1
-#Each parameter is encoded as an integer for the genetic operators
+#=============================================================================================================
+
+
+#Each parameter is encoded as an integer for the genetic operators ===========================================
+#NUM_FILTERS = {0:64, 1:128, 2:256, 3:512}
 CONV_KERNELS = list_to_dictionary(CONV_KERNEL_LIST)
 POOL_KERNELS = list_to_dictionary(POOL_KERN_LIST)
 #NUM_FILTERS = {0:64, 1:128, 2:256, 3:512}
@@ -186,6 +204,10 @@ NUM_FILTERS = list_to_dictionary (NUM_FILTERS_LIST)
 DENSE_NEURONS = list_to_dictionary(DENSE_NEURONS_LIST)
 ACTIVATION_FUNCTIONS = list_to_dictionary(ACTIVATION_FUNCTIONS_LIST)
 LAYERS_TYPES = list_to_dictionary(layer_types_list)
+#==============================================================================================================
+
+#This is used for the mutate_layer_parameters method
+LAYER_DICTS_ASSOCIATION = {'CONV':CONV_KERNELS, 'POOLMAX':POOL_KERNELS, 'POOLAVG':POOL_KERNELS, 'DENSE':DENSE_NEURONS}
 
 ARCH_NAMES_LIST = generate_letter_list()
 

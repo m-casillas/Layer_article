@@ -46,6 +46,7 @@ class Architecture(ABC):
         self.dP2 = -1
         self.dBM = -1
         self.isChild = False #Use this for the architecture info report
+        self.isMutant = False
     
     @abstractmethod
     def decode(self):
