@@ -1,7 +1,10 @@
 #gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':[-1,2]}, {'CONV':[64,3]}, {'POOLMAX':[-1,2]}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
 
-#CHECK THE TOTAL ARCHS COUNT
-#Add the succesfulCross and mut counters!
+#Defina function that splits a CSV file into several (for each combination) and another one that merge several files into a single one
+#REPORT FOR GAs PERFORMANCE: Right now it takes the last of each generation and sum them. Next time, its only the last number per EXECUTION.
+#ALSO, CHECK REPORTS FOR RANDOM
+#SUCCES MUT AND CROSS ITS A RATIO. I NEED THE TOTAL GENETIC OPERATIONS, CHECK IF THEY ARE BEING SAVED IN THE REPORT
+#VALIDATE_ARCHITECTURE HAS TO BE PERFECT
 #LIMIT NUMBER OF POOLING LAYERS
 #Save the best architectures in other file. architectures.csv is for the surrogate model
 

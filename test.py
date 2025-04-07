@@ -22,25 +22,15 @@ from ReportENAS import *
 from globalsENAS import *
 from configENAS import *
 
-tecNAS = TECNAS()
-reporter = ReportENAS()
+os.system("cls")
 
-arch = tecNAS.random_individual()
-archP1 = tecNAS.random_individual()
-archP2 = tecNAS.random_individual()
-archM = tecNAS.random_individual()
+tecnas = TECNAS()
+arch = tecnas.random_individual()
+print(arch.genotype.gen_list)
+print()
+print(f'{MUTABLE_LCHANGETYPE_INDEXES = }')
+print(f'{MUTABLE_LCHANGEPARAM_INDEXES = }')
+print(f'{SPC_INDEXES = }')
 
-print(arch)
-print(arch.integer_encoding)
-
-arch.isChild = True
-archM.isChild = True
-archM.parent1 = archP1
-archM.parent2 = archP2
-archM.before_mutation = copy.deepcopy(arch)
-archM.dP1 = hamming_distance(arch.integer_encoding, archP1.integer_encoding)
-archM.dP2 = hamming_distance(arch.integer_encoding, archP2.integer_encoding)
-archM.dBM = hamming_distance(archM.integer_encoding, arch.integer_encoding)
-reporter.save_arch_info(archM)
-reporter.save_arch_info(archP1)
-reporter.save_arch_info(archP2)
+#     0               1                      2                   3                      4                  5                6                           7
+#[{'INP': 32}, {'CONV': [256, 5]}, {'POOLMAX': [-1, 3]}, {'CONV': [128, 5]}, {'POOLMAX': [-1, 3]}, {'FLATTEN': None}, {'DENSE': [128, 'relu']}, {'DENSE': [10, 'softmax']}]

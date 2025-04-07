@@ -1,3 +1,4 @@
+import psutil
 import tensorflow as tf
 from colorama import Fore, Back, Style, init
 from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2
@@ -11,7 +12,6 @@ from tensorflow.keras.callbacks import EarlyStopping
 from configENAS import *
 from Genotype import *
 from ReportENAS import *
-from PlotterENAS import *
 from LayerRepresentation import *
 from Crossover import *
 from Mutator import *
@@ -30,6 +30,13 @@ import copy
 
 #TECNAS is a class that performs evoltuionary neural architecture search, using genetic operators
 class TECNAS:
+    def child_better_parents(self, child):
+        #Check if the child is better than both parents
+        if child.acc > child.parent1.acc and child.acc > child.parent2.acc:
+            return True
+        else:
+            return False
+
     def get_normalize_dataset(self):
         (self.x_train, self.y_train), (self.x_test, self.y_test) = datasets.cifar10.load_data()
         # Get total number of training samples
@@ -92,7 +99,8 @@ class TECNAS:
         print(f'Validating:  {gen_list}')
         if len(gen_list) != SIZE_GENLIST:
             print(f'FATAL ERROR. ARCHITECTURE SIZE CHANGED: {len(gen_list)}, should be {SIZE_GENLIST}')
-            return None
+            print('Creating random architecture')
+            return self.random_genlist()
         changed = False
         temp_gen_list = copy.deepcopy(gen_list)
         for i, layer_dict in enumerate(gen_list): 
@@ -144,9 +152,12 @@ class TECNAS:
         for i in range(len(self.children)):
             name_before_mut = self.children[i].idx
             mutated_child = self.change_layer_parameters_or_type(self.children[i], mutation_type)
+            self.total_mut += 1
             mutated_child.idx = str(name_before_mut) + '[M]' #Add M to the index to indicate it was mutated      
             mutated_child = self.make_mutant(mutated_child, self.children[i])
             mutated_child = self.train_model(mutated_child)
+            #Assesing if the mutation was succesful
+            self.succ_mut += 1 if mutated_child.acc > self.children[i].acc else 0
             self.children[i] = copy.deepcopy(mutated_child)
     
     def crossover(self, arch_obj1, arch_obj2):
@@ -197,6 +208,7 @@ class TECNAS:
                 child2.set_genoStr()
                 child1 = self.make_child(child1, parent1, parent2)
                 child2 = self.make_child(child2, parent1, parent2)
+                self.total_cross += 2
                 print('Done\n')
                 
                 print('Training parents and children')
@@ -205,6 +217,11 @@ class TECNAS:
                 child1 = self.train_model(child1)
                 child2 = self.train_model(child2)
                 print('Parent and children training done')
+
+                print('\nAssessing if crossover was succesful')
+                self.succ_cross += 1 if self.child_better_parents(child1) else 0
+                self.succ_cross += 1 if self.child_better_parents(child2) else 0
+                print('Done\n')
                 
                 self.children.append(child1)
                 self.children.append(child2)
@@ -213,37 +230,27 @@ class TECNAS:
         layers_list = arch_obj.decode()
         model = models.Sequential(layers_list)
         return model
-
-    def random_individual(self):
-        # TODO: Add more representations and encodings.
-        #Create the inner layers, then add the input size at 0 and the last layers at the end
-        '''
-        gen_list = [
-                    {'INP':INPUT_SIZE},
-                    create_conv_layer(),
-                    create_conv_layer(),
-                    create_pool_max_layer(),
-                    create_conv_layer(),
-                    create_conv_layer(),
-                    create_pool_avg_layer(),
-                    {'FLATTEN':None},
-                    create_dense_layer(),
-                    create_dense_layer(10, 'softmax')
-                ]
-        '''
+    
+    def random_genlist(self):
         gen_list = []
         for _ in range(SIZE_GENLIST-NUM_FIXED_LAYERS):
             layer_type = random.choice(type_mutable_layers)
             layer_func = create_layers_functions_dict[layer_type]
             gen_list.append(layer_func())
         gen_list.insert(0, {'INP':INPUT_SIZE})
-        gen_list.insert(1, create_conv_layer(32,3))
-        gen_list.append(create_pool_max_layer())
+        gen_list.insert(1, create_conv_layer())
         gen_list.append({'FLATTEN':None})
         gen_list.append(create_dense_layer())
-        gen_list.append(create_dense_layer(256, 'relu'))
         gen_list.append(create_dense_layer(10, 'softmax'))
         gen_list = self.validate_architecture(gen_list)
+        return gen_list
+
+    def random_individual(self):
+        # TODO: Add more representations and encodings.
+        #Create the inner layers, then add the input size at 0 and the last layers at the end
+        
+        gen_list = []
+        gen_list = self.random_genlist()
         genotype = Genotype('L', 'IV', gen_list)
         idx = random.choice(ARCH_NAMES_LIST)
         arch_obj = LayerRepresentation('S', str(idx), genotype)
@@ -251,9 +258,15 @@ class TECNAS:
         return arch_obj
 
     def train_model(self, arch_obj, epochs = EPOCHS):
-        print(Fore.GREEN + f'\n{ast} EXECUTION {e+1}/{EXECUTIONS} GENERATION {g+1}/{GENERATIONS} {crossover_type} {mutation_type} {self.arch_count}/{TOTAL_ARCH} architectures {ast}\n')
+        ast = self.ast
+        print(Fore.GREEN + f'\n{ast} EXECUTION {self.exec+1}/{EXECUTIONS} GENERATION {self.generation+1}/{GENERATIONS} {crossover_type} {mutation_type} {self.arch_count}/{TOTAL_ARCH} architectures {ast}\n')
+        print(Style.RESET_ALL)
+        memory = psutil.virtual_memory()
+        # Print the percentage of RAM used
+        print(Fore.RED + f"RAM used: {memory.percent}%")
         print(Style.RESET_ALL)
         print(f'\nTraining {arch_obj.idx}...')
+        print(arch_obj.genotype.gen_list)
         isFather = False
 
         #Check if the architecture was already trained
@@ -267,38 +280,47 @@ class TECNAS:
                 arch = self.trained_archs[arch_obj.idx]
                 if isFather == True:
                     arch = self.make_parent(arch)
-                self.reporter.save_arch_info(arch, self.search_strategy, self.crossover_type, self.mutation_type, g, e, local_seed)
+                self.reporter.save_arch_info(arch, self.search_strategy, self.crossover_type, self.mutation_type, self.generation, self.exec, local_seed, self.succ_cross, self.succ_mut)
                 return copy.deepcopy(arch)
                
         if TRAIN == False:
             print(f"Simulating trainining model {arch_obj.idx}")
-            self.reporter.save_arch_info(arch_obj, self.search_strategy, crossover_type, mutation_type, g, e, local_seed)
+            print(arch_obj.genotype.gen_list)
+            arch_obj.acc_hist = [random.randint(0,10) for i in range(EPOCHS)]
+            arch_obj.loss_hist = [random.randint(0,10) for i in range(EPOCHS)]
+            arch_obj.acc = random.randint(0,10)
+            arch_obj.loss = random.randint(0,10)
+            arch_obj.flops = random.randint(0,10)
+            arch_obj.cpu_hours = random.randint(0,10)
+            arch_obj.num_params = random.randint(0,10)
+            self.reporter.save_arch_info(arch_obj, self.search_strategy, self.crossover_type, self.mutation_type, self.generation, self.exec, local_seed, self.succ_cross, self.succ_mut)
             print(f'Simulating Training {arch_obj.idx} complete')
             self.trained_archs[arch_obj.idx] = arch_obj
             self.arch_count += 1
             return arch_obj
 
-        # Normalize the images to [0, 1] range
-        x_train, x_test = self.x_train / 255.0, self.x_test / 255.0
-        y_train, y_test = self.y_train, self.y_test
         with tf.device('/gpu:0'):
-            model = self.create_model(arch_obj)
-            model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-            if epochs == 5:
-                patience = 3
-            else:
-                patience = 5
-            early_stopping = EarlyStopping(monitor='val_accuracy', patience=patience, restore_best_weights=True)
-            start_time = time.time()
-            # Train the model
-            history = model.fit(x_train, y_train, epochs=epochs, batch_size=BATCH_SIZE, validation_data=(x_test, y_test))  # Adjust epochs as needed ==========================================
-            end_time = time.time()
-
-            # Evaluate the model on test data
-            print('Evaluating model on test data...')
-            test_loss, test_acc = model.evaluate(x_test, y_test, verbose=0)
-            print(f'\nTraining {arch_obj.idx} complete')
-
+            while True:
+                try:
+                    model = self.create_model(arch_obj)
+                    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+                    patience = 3 if epochs == 5 else 5
+                    early_stopping = EarlyStopping(monitor='val_accuracy', patience=patience, restore_best_weights=True)
+                    start_time = time.time()
+                    # Train the model
+                    history = model.fit(self.x_train, self.y_train, epochs=epochs, batch_size=BATCH_SIZE, validation_data=(self.x_test, self.y_test), callbacks=[early_stopping])
+                    end_time = time.time()
+                    # Evaluate the model on test data
+                    print('Evaluating model on test data...')
+                    test_loss, test_acc = model.evaluate(self.x_test, self.y_test, verbose=0)
+                    print(f'\nTraining {arch_obj.idx} complete')
+                    break  # training successful, exit the loop
+                except Exception as e:
+                    print(Fore.RED + f"Training failed for architecture {arch_obj.idx}: {e}")
+                    print(Style.RESET_ALL)
+                    print("Generating a new random architecture...")
+                    arch_obj.genotype.gen_list = self.random_genlist()
+                    arch_obj.wasInvalid = True
         # Calculate and print CPU-Hours
         training_time_seconds = end_time - start_time
         training_time_hours = training_time_seconds / 3600
@@ -317,8 +339,9 @@ class TECNAS:
         arch_obj.cpu_hours = training_time_hours            # Training time in CPU-hours
         arch_obj.num_params = total_params                  # Total number of model parameters
         arch_obj.flops = calculate_model_flops(model)
+        arch_obj.trained_epochs = len(history.history['loss'])
 
-        self.reporter.save_arch_info(arch_obj, self.search_strategy, self.crossover_type, self.mutation_type, g, e, local_seed)
+        self.reporter.save_arch_info(arch_obj, self.search_strategy, self.crossover_type, self.mutation_type, self.generation, self.exec, local_seed, self.succ_cross, self.succ_mut)
         self.trained_archs[arch_obj.idx] = arch_obj
         self.arch_count += 1
         
@@ -328,7 +351,7 @@ class TECNAS:
         global SEED
         global local_seed
         global arch_count
-        ast = 50*'+'
+        
         global search_strategy
         global crossover_types_list, mutation_types_list
         for search_strategy in search_strategies_list:
@@ -343,20 +366,24 @@ class TECNAS:
                 global mutation_type
                 for mutation_type in mutation_types_list:
                     self.mutation_type = mutation_type
-                    
                     global e
                     local_seed = SEED
-                    #random.seed(local_seed)
+                    random.seed(local_seed)
+                    np.random.seed(local_seed)
+                    tf.random.set_seed(local_seed)
                     for e in range(EXECUTIONS):
+                        self.exec = e
                         self.trained_archs = {}
-                        random.seed(local_seed)
-                        np.random.seed(local_seed)
-                        #torch.manual_seed(local_seed)
                         print('\nInitializing population')
                         self.initialize_pop()
                         print('Done\n')
                         global g
+                        self.succ_cross = 0
+                        self.succ_mut = 0
+                        self.total_cross = 0
+                        self.total_mut = 0
                         for g in range(GENERATIONS):
+                            self.generation = g
                             if self.search_strategy == 'GA':
                                 print(f'\nGenerating offspring {self.search_strategy}')
                                 self.generate_offspring() #RANDOM OR CROSSOVER
@@ -396,17 +423,14 @@ class TECNAS:
                     print(median_arch)
                     #self.create_report(reporting_single_arch = True, single_arch = median_arch)  #CHANGE THIS ============================================
                     #self.create_report(reporting_single_arch = False)
-                    if PLOT == True:
-                        plotter = PlotterENAS(self)
-                        plotter.plot_accuracy_loss_histories('L')
-                        plotter.plot_accuracy_loss_histories('A')
-
+                    
     def initialize_pop(self):
         self.pop = []
         for i in range(self.NPOP):
             self.pop.append(self.random_individual())
 
     def __init__(self):
+        self.ast = 50*'+'
         self.NPOP = MAIN_NPOP
         self.MUT_PROB = MUT_PROB
         self.crossover_types_list = crossover_types_list
@@ -414,8 +438,13 @@ class TECNAS:
         self.mutation_type = None
         self.search_strategy = None
         self.reporter = ReportENAS()
+        self.generation = 0
+        self.exect = 0
         self.arch_count = 0
-        
+        self.succ_mut = 0
+        self.succ_cross = 0
+        self.total_mut = 0
+        self.total_cross = 0
         self.pop = []
         self.children = []
         self.trained_archs = {}

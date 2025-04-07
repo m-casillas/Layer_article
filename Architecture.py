@@ -47,6 +47,8 @@ class Architecture(ABC):
         self.dBM = -1
         self.isChild = False #Use this for the architecture info report
         self.isMutant = False
+        self.wasInvalid = False
+        self.trained_epochs = EPOCHS
     
     @abstractmethod
     def decode(self):

@@ -5,7 +5,46 @@ from configENAS import *
 #from TECNAS import *
 
 class ReportENAS:
-    def save_arch_info(self, arch, se, ct, mt, g, e, ls, epochs = EPOCHS):
+    def stats_select_columns(self, df, all_columns, selected_columns, stat):
+        row_measures = []
+        #stat = 'mean' or 'std'
+        if stat == 'mean':
+            row_measures.append('Mean (all values)')
+            stat_func = np.mean
+        elif stat == 'std':
+            row_measures.append('Std (all values)')
+            stat_func = np.std
+        else:
+            raise ValueError("Invalid statistic type. Use 'mean' or 'std'.")
+               
+        
+        for col in all_columns[1:]:
+            if col in selected_columns:
+                row_measures.append(stat_func(df[col]))
+            else:
+                row_measures.append('')
+        return pd.concat([df, pd.DataFrame([row_measures], columns=df.columns)], ignore_index=True)
+
+    def calculate_mean_std(self, table, columns, add_label = False):
+        #add_label decites if Mean and Std are added or not.
+        #Add mean and std at the end
+        table_np = np.array(table)
+        row_measures = []
+        if add_label == True:
+            row_measures.append('Mean')
+        
+        for i in range(1,len(columns)):
+            row_measures.append(np.mean(table_np[:, i]))
+        table.append(row_measures)
+        row_measures = []
+        if add_label == True:
+            row_measures.append('Std')
+        for i in range(1,len(columns)):
+            row_measures.append(np.std(table_np[:, i]))
+        table.append(row_measures)
+        return table
+
+    def save_arch_info(self, arch, se, ct, mt, g, e, ls, sc, sm, tc, tm, epochs = EPOCHS):
         if REPORT_ARCH == False:
             print('REPORT_ARCH is False. No information will be saved.')
             return
@@ -15,10 +54,16 @@ class ReportENAS:
         self.crossover_type = ct 
         self.mutation_type = mt
         self.search_strategy = se
+        self.succesful_mutation = sm
+        self.succesful_crossover = sc
+        self.total_mutations = tm
+        self.total_crossovers = tc
 
-        parent1_integer_encoding = []
-        parent2_integer_encoding = []
-        before_mutation_integer_encoding = []
+        parent1_integer_encoding = 'NONE'
+        parent2_integer_encoding = 'NONE'
+        before_mutation_integer_encoding = 'NONE'
+        p1_idx = 'NONE'
+        p2_idx = 'NONE'
 
         if arch.isChild == False: #It is parent
             pass
@@ -26,6 +71,8 @@ class ReportENAS:
             if arch.isMutant == True:
                 before_mutation_integer_encoding = str(arch.before_mutation.integer_encoding)
             else:
+                p1_idx = arch.parent1.idx
+                p2_idx = arch.parent2.idx
                 parent1_integer_encoding = str(arch.parent1.integer_encoding)
                 parent2_integer_encoding = str(arch.parent2.integer_encoding)
 
@@ -43,22 +90,30 @@ class ReportENAS:
              'isMutant': [arch.isMutant],
              'Integer_encoding': [str(arch.integer_encoding)],
              'Genotype': [arch.genoStr], 
-             'Crossover type': [self.crossover_type],
-             'Mutation type': [self.mutation_type],
-             'Search strategy': [self.search_strategy],
+             'Crossover_type': [self.crossover_type],
+             'Mutation_type': [self.mutation_type],
+             'Search_strategy': [self.search_strategy],
              #'Type': [arch.arch_type], 
-             'Epochs':[epochs],
+             'Epochs':[arch.trained_epochs],
              'Accuracy': [arch.acc], 
              'Loss': [arch.loss], 
              'FLOPs': [arch.flops], 
-             'CPU Sec': [arch.cpu_hours*3600], 
-             'Number of Parameters': [arch.num_params], 
-             'Parent1': [parent1_integer_encoding],
-             'Parent2': [parent2_integer_encoding],
-             'Before Mutation': [before_mutation_integer_encoding],
+             'CPU_Sec': [arch.cpu_hours*3600], 
+             'Num_Params': [arch.num_params], 
+             'P1_idx': [p1_idx],
+             'P2_idx': [p2_idx],
+             'P1': [parent1_integer_encoding],
+             'P2': [parent2_integer_encoding],
+             'Before_Mut': [before_mutation_integer_encoding],
              'HD_P1': [arch.dP1],
              'HD_P2': [arch.dP2],
-             'HD_BM': [arch.dBM]}
+             'HD_BM': [arch.dBM],
+             'Succ_Crossover': [self.succesful_crossover],
+             'Succ_Mutation': [self.succesful_mutation],
+             'Total_Crossovers': [self.total_crossovers],
+             'Total_Mutations': [self.total_mutations],
+             'Was_invalid': [arch.wasInvalid],
+             }
         )
         path_report = os.path.join(path_results, f'{architecture_csv_filename}')
         #Check if the file exists to add the headers or not.
@@ -67,35 +122,111 @@ class ReportENAS:
         data_arch.to_csv(path_report, mode='a', index=False, header=not file_exists)
         print(f'Architecture {arch.idx} info saved to {path_report}')
 
+    def summarize_archs_report(self, filename):
+        #Create a report showing all the performance measures for the best architectures per execution
+        print('Preparing to summarize best architecture performance...')
+        print(f'Loading {filename}')
+        columns = ['Execution', 'Accuracy', 'Loss', 'FLOPs', 'CPU_Sec', 'Num_Params']
+        df = pd.read_csv(filename, encoding='utf-8')
+        exec_list = df['Execution'].unique()
+        table = []
+        #Add all best arch's performance indicators per execution
+        for exec in exec_list:
+            #exec = 1
+            #Obtain a dafatrame per execution, only mutants and only the last generation.
+            df_exec = df[(df['Execution'] == exec) & (df['isMutant'] == True) & (df['Generation'] == GENERATIONS)]
+            best_acc = df_exec['Accuracy'].max()
+            best_arch = df_exec[df_exec['Accuracy'] == best_acc]
+            loss_from_best = best_arch['Loss'].values[0]
+            flops_from_best = best_arch['FLOPs'].values[0]
+            cpu_hours_from_best = best_arch['CPU_Sec'].values[0]
+            num_params_from_best = best_arch['Num_Params'].values[0]
+            row = [exec, best_acc, loss_from_best, flops_from_best, cpu_hours_from_best, num_params_from_best]
+            table.append(row)
+        #Add mean and std at the end
+        table = self.calculate_mean_std(table, columns, True)
+        df_final = pd.DataFrame(table, columns=columns)
+        newfilename = filename[:-5] + '_bestarch_summary.csv'
+        df_final.to_csv(newfilename, index = False)
+        print(f'Report saved as {newfilename}')
+        print('Done\n')
 
-    def create_report(self, reporting_single_arch = False, single_arch = None):
-        execList = list(range(1,EXECUTIONS+1))
-        epochsList = list(range(1, EPOCHS+1))
+    def summarize_GA_performance_report(self, filename):
+        #Create a report summarizing the GAs performance: distances and successful mutations and crossovers per execution
+        #Create a table with non-mutated children and calculate distances between their parents
+        #Also, add the information about distances of mutated children, and succesful mutations and crossovers
+        #Create a report showing all the performance measures for the best architectures per execution
+        print('Preparing to summarize GA performance...')
+        print(f'Loading {filename}')
+        
+        #columns_file = ['Execution', 'HD_P1_mean', 'HD_P2_mean', 'HD_P1_std', 'HD_P2_std', 'HD_BF', 'HD_BF_mean', 'HD_BF_std', 'succ_crossover', 'succ_mutation']
+        df = pd.read_csv(filename, encoding='utf-8')
+        exec_list = df['Execution'].unique()
+        #For HD of parents ================================================================================
+        table = []
+        columns = ['Execution', 'HD_P1_mean', 'HD_P2_mean', 'HD_P1_std', 'HD_P2_std']
+        for exec in exec_list:
+            df_children = df[(df['Execution'] == exec) & (df['isMutant'] == False) & (df['isChild'] == True)]
+            HD_P1_mean = df_children['HD_P1'].mean()
+            HD_P2_mean = df_children['HD_P2'].mean()
+            HD_P1_std = df_children['HD_P1'].std()
+            HD_P2_std = df_children['HD_P2'].std()
+            row = [exec, HD_P1_mean, HD_P2_mean, HD_P1_std, HD_P2_std]
+            table.append(row)
+        df_HD_Parents = pd.DataFrame(table, columns=columns)
 
-        if reporting_single_arch == True: #Print the median arch information
-            empty_list = ['']*(len(epochsList)-1)
-            data = pd.DataFrame({   f"Epochs":epochsList,  f"Best_accuracy": single_arch.acc_hist,
-                                    f"Loss": single_arch.loss_hist,  f"Acc_mean": [np.mean(single_arch.acc_hist)]+empty_list,
-                                    f"Loss_mean": [np.mean(single_arch.loss_hist)]+empty_list
-                                })
-            path_report = os.path.join(path_results, f'{self.filename}_MEDIAN.csv')
-        else:
-            empty_list = ['']*(len(execList)-1)
-            data = pd.DataFrame({   f"Execution":execList,  f"Best_accuracy": self.best_acc_list,
-                                    f"Loss": self.loss_list,  f'CPU_hrs':self.cpu_hours_list,
-                                    f'Num_params':self.num_params_list, f'FLOPs':self.flops_list,
-                                    f"Acc_mean": [np.mean(self.best_acc_list)]+empty_list, f"Loss_mean": [np.mean(self.loss_list)]+empty_list,
-                                    f'CPU_hrs_mean':[np.mean(self.cpu_hours_list)]+empty_list, f'Num_params_mean':[np.mean(self.num_params_list)]+empty_list,
-                                    f'FLOPs_mean':[np.mean(self.flops_list)]+empty_list, f"Acc_std": [np.std(self.best_acc_list)]+empty_list,
-                                    f"Loss_std": [np.std(self.loss_list)]+empty_list, f'CPU_hrs_std':[np.std(self.cpu_hours_list)]+empty_list,
-                                    f'Num_params_std':[np.std(self.num_params_list)]+empty_list, f'FLOPs_std':[np.std(self.flops_list)]+empty_list
-                                })
-
-            path_report = os.path.join(path_results, f'{self.filename}.csv')
-        print(f'Report saved in {path_report}')
-        data.to_csv(path_report, index=False)
+        #For HD of before mutation ================================================================================
+        table = []
+        columns = ['HD_BM_mean', 'HD_BM_std']
+        for exec in exec_list:
+            df_children = df[(df['Execution'] == exec) & (df['isMutant'] == True)]
+            HD_BF_mean = df_children['HD_BM'].mean()
+            HD_BF_std = df_children['HD_BM'].std()
+            row = [HD_BF_mean, HD_BF_std]
+            table.append(row)
+        df_HD_BeforeMut = pd.DataFrame(table, columns=columns)
+        
+        #For succeful mutation and crossover. ================================================================================
+        generations_list = df['Generation'].unique()
+        table = []
+        columns = ['succ_crossover', 'succ_mutation']
+        #total_muts = df['Total_Mutations'].max()
+        #total_cross = df['Total_Crossovers'].max()
+        total_muts = 6*3
+        total_cross = 3*3
+        for exec in exec_list:
+            succ_crossover = 0
+            succ_mutation = 0
+            for gener in generations_list:
+                df_exec_gener = df[(df['Execution'] == exec) & (df['Generation'] == gener)]
+                succ_crossover += df_exec_gener['Succ_Crossover'].max()
+                succ_mutation += df_exec_gener['Succ_Mutation'].max()
+            row = [succ_crossover/total_muts, succ_mutation/total_cross]
+            table.append(row)
+        df_succ_GAs = pd.DataFrame(table, columns=columns)
+        #Join all dataframes
+        df_final = pd.concat([df_HD_Parents, df_HD_BeforeMut, df_succ_GAs], axis=1)
+        
+        #For mean and std of only these columns
+        columns = ['Execution', 'HD_P1_mean', 'HD_P2_mean', 'HD_P1_std', 'HD_P2_std','HD_BM_mean', 'HD_BM_std', 'succ_crossover', 'succ_mutation']
+        columns_mean = ['HD_P1_mean', 'HD_P2_mean','HD_BM_mean','succ_crossover', 'succ_mutation']
+        df_final = self.stats_select_columns(df_final, columns, columns_mean, 'mean')
+        columns_std = ['HD_P1_mean', 'HD_P2_mean', 'HD_BM_mean', 'succ_crossover', 'succ_mutation']
+        df_final = self.stats_select_columns(df_final, columns, columns_mean, 'std')
+        newfilename = filename[:-5] + '_GA_summary.csv'
+        df_final.to_csv(newfilename, index = False)
+        print(f'Report saved as {newfilename}')
+        print('Done\n')
+    
     def __init__(self):
         self.crossover_type = None
         self.mutation_type = None
         self.generation = None
         self.execution = None
+
+import os
+os.system("cls")
+reporter = ReportENAS()
+filename = r'C:\Users\xaero\OneDrive\ITESM DCC\Layer_article\results\SPC_MPARAMS.csv'
+reporter.summarize_archs_report(filename)
+reporter.summarize_GA_performance_report(filename)

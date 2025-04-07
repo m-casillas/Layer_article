@@ -1,5 +1,6 @@
-from globalsENAS import *
-from configENAS import *
+from TECNAS import TECNAS
+from ReportENAS import ReportENAS
+import os
 import numpy as np
 import time
 import pandas as pd
@@ -189,3 +190,13 @@ class PlotterENAS:
     def __init__(self, tecNASobj):
         self.tecNASobj = tecNASobj
         pass
+
+'''
+os.system("cls")
+tecnas = TECNAS()
+tecnas.ENAS()
+reporter = ReportENAS()
+reporter.create_report(tecnas)
+plotter = PlotterENAS(tecnas)
+plotter.create_grouped_plots(tecnas.filename, tecnas.bar_columns, tecnas.box_columns)
+'''

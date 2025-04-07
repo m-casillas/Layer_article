@@ -156,8 +156,8 @@ type_mutable_layers = ['CONV','POOLMAX']#,'POOLAVG']
 create_layers_functions_dict = {'CONV':create_conv_layer, 'POOLMAX':create_pool_max_layer, 'POOLAVG':create_pool_avg_layer, 'DENSE':create_dense_layer}
 
 ast = 50*'+'
-SIZE_GENLIST = 12 #FIXED LAYERS LIKE INP CONV ... MAXPOOL FLATTEN DENSE DENSE DENSE(10) ARE PART OF THESE
-NUM_FIXED_LAYERS = 7 
+SIZE_GENLIST = 10 
+NUM_FIXED_LAYERS = 5 #NUMBER OF FIXED LAYERS (INPUT, CONV AND FLATTEN DENSE DENSE) ===========================================================================================
 INPUT_SIZE = 32
 BATCH_SIZE = 64
 
@@ -172,13 +172,17 @@ ACTIVATION_FUNCTIONS_LIST = ['relu', 'sigmoid', 'tanh', 'softmax']
 #==================================================================
 
 #Set what layers in the gen_list may undergo changes.===========================================================
-#All layers can change parameters, except the first two, the last POOL, FLATTEN and the last DENSE layer
-MUTABLE_LCHANGEPARAM_INDEXES = list(range(2,SIZE_GENLIST-6+1)) + [SIZE_GENLIST-3]
-#All layers can change type, except the first one, the FLATTEN and the two last DENSE layers
-#MUTABLE_LCHANGETYPE_INDEXES  = list(range(1,SIZE_GENLIST-3))
-MUTABLE_LCHANGETYPE_INDEXES  = list(range(2,SIZE_GENLIST-6+1)) + [SIZE_GENLIST-3]
+k = SIZE_GENLIST-NUM_FIXED_LAYERS #Number of layers between INP, CONV and FLATTEN, DENSE, DENSE
+#All layers can change parameters, except the first one, FLATTEN and the last DENSE layer
+
+k1 = k + 2 #All layers inbetween, plus the first CONV, plus the one before the last DENSE layer
+MUTABLE_LCHANGEPARAM_INDEXES = list(range(1, k1)) + [k1 + 1]
+ 
+#All layers can change type, except the first one, the CONV the FLATTEN and the two last DENSE layers
+k2 = SIZE_GENLIST-NUM_FIXED_LAYERS #Number of layers between INP, CONV and FLATTEN, DENSE, DENSE
+MUTABLE_LCHANGETYPE_INDEXES  = list(range(2, 2 + k))
 #INDEXES FOR CROSSOVER
-SPC_INDEXES = list(range(2,SIZE_GENLIST-6 + 2))
+SPC_INDEXES = MUTABLE_LCHANGETYPE_INDEXES
 #==============================================================================================================
 
 #Set the minimum and maximum INDEX for the hyperparameters. This is used for mutation (indexes are added) =====
@@ -217,3 +221,5 @@ formatted_time = now.strftime("%Y-%m-%d_%H-%M")
 # Create filename
 architecture_csv_filename  = f"archs_{formatted_time}.csv"
 
+print(f'{MUTABLE_LCHANGETYPE_INDEXES = }')
+print(f'{MUTABLE_LCHANGEPARAM_INDEXES = }')
