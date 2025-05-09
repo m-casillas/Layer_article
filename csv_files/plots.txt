@@ -1,0 +1,35 @@
+Put files in
+.../csv_files/to_be_plotted
+
+PlotterENAS.py
+*********************************
+*Convergence plots for single archs
+plotter.plot_acc_loss_arch()
+
+It plots the acc and loss history of single architectures inside a CSV file.
+Plots are saved in 
+.../csv_files/to_be_plotted/convergence_plots_single_archs
+**************************
+
+**********************************
+*Convergence plots for best archs
+plotter.plot_convergence_exec()
+From a splitted file it takes the best architecture per generation and plot their accuracies. This is done per execution.
+*******************************************************
+
+************************************
+*Barplots for summarized information.
+plotter.plot_measures_from_folder(plotter.columns_arch)
+plotter.plot_measures_from_folder(plotter.columns_GA)
+
+It plots combined summarized information from *_summary files (best archs per 
+exec and GA performance).
+
+For example, accuracy from files 1, 2 and 3. Also, FLOPs, from files 1, 2 and 3, etc.
+********************************************
+
+
+
+
+
+

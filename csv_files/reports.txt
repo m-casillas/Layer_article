@@ -1,0 +1,24 @@
+Summarize the information of best architectures per execution (best
+of best archs per generation).
+
+All files must be splitted per crossover and mutation operators.
+Put them inside
+.../csv_files/reports/to_be_bestarch_summarized
+
+All summaries are saved in 
+.../csv_files/reports/to_be_bestarch_summarized/bestarch_summaries
+
+From ReportENAS, run reporter_summarize_archs_report_folder()
+
+====================================================================
+
+Summarize the GA performance per execution
+
+All files must be splitted per crossover and mutation operators.
+Put them inside
+.../csv_files/reports/to_be_GA_summarized
+
+All summaries are saved in 
+.../csv_files/reports/to_be_bestarch_summarized/GA_summaries
+
+From ReportENAS, run reporter_summarize_GA_performance_report_folder()

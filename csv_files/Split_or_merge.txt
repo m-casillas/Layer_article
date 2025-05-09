@@ -1,0 +1,13 @@
+Functions are in file_handler.py
+Go to
+.../Layer_article/csv_files/merge_or_split
+
+*For splitting*
+Files must be in the to_be_splitted folder.
+Run split() 
+It'll split all files in the to_be_splitted folder inside a custom folder. Each splitted filename consists of the crossover-mutation combination.
+
+*For merging*
+Files must be in the to_be_merged_folder.
+Run merge()
+All files will be merged into a single file in the merged folder.
