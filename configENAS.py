@@ -2,12 +2,12 @@ from globalsENAS import *
 os.system("cls")
 
 search_strategies_list = ['GA', 'RANDOM']
-mutation_types_list = ['MPARAMS', 'MTYPE', 'NONE']
+mutation_types_list = ['MPAR', 'MTYP', 'NONE']
 crossover_types_list = ['SPC', 'TPC', 'UC', 'NONE']
 
-search_strategies_list = ['RANDOM']
-#mutation_types_list = ['MPARAMS']
-#crossover_types_list = ['NONE']
+search_strategies_list = ['GA']
+mutation_types_list = ['NONE']
+crossover_types_list = ['SPC', 'TPC', 'UC', 'NONE']
 
 search_strategy_dict = list_to_dictionary(search_strategies_list)
 mutation_type_dict = list_to_dictionary(mutation_types_list)
@@ -32,7 +32,7 @@ SEED = 42
 
 DATASET_PART = 1/2 #Divide the dataset
 MAIN_NPOP = 10
-MUT_PROB = 1/(SIZE_GENLIST-NUM_FIXED_LAYERS) #SIZE_GENLIST is the number of layers that may mutate
+MUT_PROB = 1/NUM_MUTABLE_LAYERS #SIZE_GENLIST is the number of layers that may mutate
 EPOCHS = 10 #Number of epochs for training one architecture
 GENERATIONS = 10
 EXECUTIONS = 10 #1 execution is after #GENERATIONS

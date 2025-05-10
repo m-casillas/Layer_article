@@ -185,7 +185,7 @@ class Surrogate_ENAS:
 os.system("cls")
 regressor_folder = r'C:\Users\xaero\OneDrive\ITESM DCC\Layer_article\results\surrogates'
 archs_CSV= os.path.join(regressor_folder, 'merged.csv')
-SAVE_MODELS = True
+SAVE_MODELS = False
 surrogate = Surrogate_ENAS(regressor_folder = regressor_folder, archs_CSV = archs_CSV)
 surrogate.train_all_surrogates()
 

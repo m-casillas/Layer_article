@@ -194,6 +194,7 @@ create_layers_functions_dict = {'CONV':create_conv_layer, 'POOLMAX':create_pool_
 ast = 50*'+'
 SIZE_GENLIST = 10
 NUM_FIXED_LAYERS = 5 #NUMBER OF FIXED LAYERS (INPUT, CONV AND FLATTEN DENSE DENSE) ===========================================================================================
+NUM_MUTABLE_LAYERS = NUM_FIXED_LAYERS + 2 # (add the first CONV, last POOL and before last DENSE)
 INPUT_SIZE = 32
 BATCH_SIZE = 64
 

@@ -53,5 +53,5 @@ tf.get_logger().setLevel('ERROR')
 
 print("Num GPUs Available:", len(tf.config.list_physical_devices('GPU')))
 print("GPU Details:", tf.config.list_physical_devices('GPU'))
-tecNAS = TECNAS(regressor_type = 9)
+tecNAS = TECNAS(regressor_type = 1)
 tecNAS.ENAS()

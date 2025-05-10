@@ -24,9 +24,11 @@ class Plotter:
         print(f'\nProcessing {cross} - {mut}')
         df_cross_mut = df[(df['Crossover_type'] == cross) & (df['Mutation_type'] == mut) & (df['BestGen'] == True)]
         df_last_gen = df_cross_mut[df_cross_mut['Generation'] == last_generation]
-        df_median = df_last_gen[df_last_gen['Accuracy'] == df_last_gen['Accuracy'].median()]
+        #df_median = df_last_gen[df_last_gen['Accuracy'] == df_last_gen['Accuracy'].median()]
+        df_sorted = df.sort_values(by="Accuracy").reset_index(drop=True)
+        middle_index = len(df_sorted) // 2
+        df_median = df_sorted.iloc[[middle_index]]
         df_median_row = df_median.iloc[0]
-        
         median_exec = df_median_row['Execution'].astype(int)
         df_cross_mut_median_exec = df_cross_mut[df_cross_mut['Execution'] == median_exec]
         median_trajectory = df_cross_mut_median_exec['Accuracy']
@@ -37,8 +39,12 @@ class Plotter:
 
     def get_all_medians_folder(self): 
         self.medians_folder = os.path.join(self.plot_folder, 'medians')
-        folder = self.experiment_folder
+        folder = self.splitted_folder
         ensure_folder_exists(self.medians_folder)
+        
+        # Create a single figure
+        plt.figure(figsize=(12, 6))
+        
         for archs_file in os.listdir(folder):
             if archs_file.endswith(".csv"):
                 print('Calculating median')
@@ -53,32 +59,33 @@ class Plotter:
                 for cross in cross_types:
                     for mut in mut_types:
                         median_trajectories_all_combinations.append(self.get_median_oneCombination(df, cross, mut))
-                        
-                # Plot all median trajectories
-                generations = df['Generation'].unique().astype(str)
                 
-                plt.figure(figsize=(10, 6))
+                # Plot median trajectories
+                generations = df['Generation'].unique().astype(str)
                 
                 for comb_dict in median_trajectories_all_combinations:
                     for comb, trajectory in comb_dict.items():
                         plt.plot(generations, trajectory, label=comb)
-                plt.xlabel('Generation')
-                plt.ylabel('Accuracy')
-                plt.title('Median Accuracy Trajectories for All Combinations')
-                plt.legend()
-                plt.grid()
-                plot_path = os.path.join(self.medians_folder, f'{archs_file}_medians.png')
-                plt.savefig(plot_path)
-                #plt.show()
-                plt.clf()
-                plt.close()
-                print(f'Saving {plot_path} done')
+        
+        plt.xlabel('Generation')
+        plt.ylabel('Accuracy')
+        plt.title('Median Accuracy Trajectories for All Genetic Combinations')
+        #plt.legend()
+        plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left')
+        plt.grid(True)
+        # Save the combined plot
+        plot_path = os.path.join(self.medians_folder, 'combined_medians.png')
+        #plt.savefig(plot_path)
+        plt.savefig(plot_path, bbox_inches='tight', dpi=300)  # Increased DPI for clarity
+        plt.clf()
+        plt.close()
+        print(f'Saving {plot_path} done')
 
+    
     def plot_measures_from_folder(self, columns):
         """
         Reads all files (splitted) in the folder containing summarized results (bestarchs and GA performance), extracts mean and other performance values,
         and creates a bar plot showing those values. Used for comparing different crossover-mutation combinations.
-
         """
         self.barplot_folder = os.path.join(self.plot_folder, 'summarized_measures')
         if 'Accuracy' in columns:
@@ -87,6 +94,7 @@ class Plotter:
             self.to_be_plotted_folder = self.GAs_summaries_folder
         ensure_folder_exists(self.barplot_folder)
         ensure_folder_exists(self.to_be_plotted_folder)
+
         for column in columns:
             all_accuracies = []
             labels = []
@@ -96,32 +104,46 @@ class Plotter:
                     file_path = os.path.join(self.to_be_plotted_folder, filename)
                     df = pd.read_csv(file_path, encoding='utf-8')  
                     df_mean = df[df['Execution'] == 'Mean']
-                    print(f'{column}')
+                    print(f'{column = }')
                     acc = df_mean[column].astype(float).iloc[0]
                     all_accuracies.append(acc)
-                    #labels.append(f"{filename.replace('_bestarch_summary.csv', '')}_{column}")
-                    labels.append(f"{filename}_{column}")
+                    #Get the cross and mut types from the filename
+                    parts = filename.split("_")
+                    result = "_".join(parts[:2])
+                    labels.append(result)
+                    #labels.append(f"{filename}_{column}")
                     print(f'Processing {filename} done')
 
             # Plot
+            sorted_data = sorted(zip(all_accuracies, labels), reverse=True)
+            all_accuracies, labels = zip(*sorted_data)
             plt.figure(figsize=(10, 6))
-            plt.bar(labels, all_accuracies, color='skyblue')
+            bars = plt.bar(labels, all_accuracies, color='skyblue')
             plt.xlabel("Search strategy")
             plt.ylabel(column)
             plt.title(f"{column} per Strategy")
-            plt.xticks(rotation=45, ha="right")
-            factor = 0.1
-            plt.ylim(min(all_accuracies) - factor, max(all_accuracies) + factor)
+            plt.xticks(rotation=90, ha="right")
+            # Add a small margin to y-limits for better visibility
+            min_val = min(all_accuracies)
+            max_val = max(all_accuracies)
+            margin = (max_val - min_val) * 0.05 if max_val != min_val else 0.1
+            plt.ylim(min_val - margin, max_val + margin)
+            # Show y-ticks (default behavior)
+            plt.yticks()
+            # Add value labels on top of bars with 4 decimal places
+            for bar in bars:
+                height = bar.get_height()
+                plt.text(bar.get_x() + bar.get_width() / 2, height + margin * 0.2,
+                        f'{height:.4f}', ha='center', va='bottom')
 
             plt.tight_layout()
             plot_path = os.path.join(self.barplot_folder, f'{column}.png')
             print(f'Saving {plot_path}')
-            plt.savefig(plot_path)
-            #plt.show()
+            plt.savefig(plot_path, dpi = 200)
             plt.clf()
             plt.close()
             print(f'Done\n')
-
+        
     def plot_convergence_exec(self):
         #Plot convergence of accurracy. x-axis are generations. y-axis are accuracies. Lines are for each execution
         #Each arch that had the best acc per generation is taken from the CSV file. Files should be splitted.
@@ -157,11 +179,11 @@ class Plotter:
                 plt.xlabel('Generation')
                 plt.ylabel('Accuracy')
                 plt.title(f'Convergence of Accuracy per Generation {filename[:-4]}')
-                plt.legend()
-                #plt.plot(generationList, max_accuracies)
-                #plt.show()
+                plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left')
+                
                 plot_figure_path = os.path.join(plot_folder, f'{os.path.basename(filename[:-4])}_convergence.png') 
                 plt.savefig(plot_figure_path)
+                plt.savefig(plot_figure_path, bbox_inches='tight', dpi=200)  # Increased DPI for clarity
                 plt.clf()
                 plt.close()
                 print(f'Saving {plot_figure_path} done')
@@ -217,7 +239,7 @@ class Plotter:
 #plotter.plot_measures_from_folder(plotter.columns_GA)
 #plotter.plot_acc_loss_arch()
 #plotter.plot_convergence_exec()
-csv_path = r"C:\Users\xaero\OneDrive\ITESM DCC\Layer_article\results\experiment_2025-04-23_12-25\archs_2025-05-08_16-24.csv"
-experiment_folder = r"C:\Users\xaero\OneDrive\ITESM DCC\Layer_article\results\experiment_2025-04-23_12-25"
+#csv_path = r"C:\Users\xaero\OneDrive\ITESM DCC\Layer_article\results\experiment_2025-04-23_12-25\archs_2025-05-08_16-24.csv"
+#experiment_folder = r"C:\Users\xaero\OneDrive\ITESM DCC\Layer_article\results\experiment2"
 #plotter = Plotter(experiment_folder)
 #plotter.get_all_medians_folder()  #NO FUNCIONA PARA RANDOM

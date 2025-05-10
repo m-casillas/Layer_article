@@ -176,6 +176,9 @@ class ReportENAS:
         
         for input_file in os.listdir(input_folder):
             filename = f'{input_file[:-4]}'
+            if 'NONE' in filename:
+                print(f'Skipping {filename} because is RANDOM or it has NONE crossover or mutation')
+                continue
             if input_file.endswith('.csv'):
                 filepath = os.path.join(input_folder, input_file)
                 print('Preparing to summarize GA performance...')
@@ -235,7 +238,7 @@ class ReportENAS:
                 df_final = self.stats_select_columns(df_final, columns, columns_mean, 'mean')
                 columns_std = ['HD_P1_mean', 'HD_P2_mean', 'HD_BM_mean', 'succ_crossover', 'succ_mutation']
                 df_final = self.stats_select_columns(df_final, columns, columns_mean, 'std')
-                newfilename = filename[:-4] + '_GA_summary.csv'
+                newfilename = filename + '_GA_summary.csv'
                 report_folder = os.path.join(output_folder)#, newfilefolder)
                 report_path = os.path.join(report_folder, newfilename)
                 ensure_folder_exists(report_folder)

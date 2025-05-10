@@ -167,10 +167,10 @@ class TECNAS:
         #Return the mutated architecture
         mutator_obj = Mutator()
 
-        if mutation_type == 'MPARAMS':
+        if mutation_type == 'MPAR':
             layers_indexes = MUTABLE_LCHANGEPARAM_INDEXES #Only this indexes may change their parameters
             mutation_function = mutator_obj.mutate_layer_parameters
-        elif mutation_type == 'MTYPE':
+        elif mutation_type == 'MTYP':
             layers_indexes = MUTABLE_LCHANGETYPE_INDEXES #Only this indexes may change type
             mutation_function = mutator_obj.mutate_layer_type
         else:
@@ -179,7 +179,7 @@ class TECNAS:
         for layer_idx in layers_indexes:
             if random.random() < self.MUT_PROB:
                 mutated_layer, layer_type = mutation_function(arch_obj_ind.genotype, layer_idx)
-                if mutation_type == 'MTYPE':
+                if mutation_type == 'MTYP':
                     #Change CONV for MAXPOOL, etc.
                     #layer_type is the original type. I have to change it.
                     old_layer_type = list(mutated_layer.keys())[0]
@@ -343,14 +343,12 @@ class TECNAS:
             self.surrogate.load_arch(arch_obj)
             arch_obj.acc = self.surrogate.predict_arch(arch_obj, self.regressor_type)
             model = self.create_model(arch_obj)
-            arch_obj.num_params = calculate_model_params(model) # Total number of model parameters
-            arch_obj.flops = calculate_model_flops(model)
             arch_obj.acc_hist = []
             arch_obj.loss_hist = []
             arch_obj.loss = -99999     # Final validation loss
             arch_obj.cpu_hours = -99999            # Training time in CPU-hours
-            arch_obj.num_params = calculate_model_params(model) # Total number of model parameters
-            arch_obj.flops = calculate_model_flops(model)
+            arch_obj.num_params = -99999 #calculate_model_params(model) # Total number of model parameters
+            arch_obj.flops = -99999 #calculate_model_flops(model)
             arch_obj.trained_epochs = -99999
 
             self.reporter.save_arch_info(self, arch_obj)
@@ -462,7 +460,11 @@ class TECNAS:
                             print('Done Selecting')
                             print('\nBest architecture is: ')
                             print(sorted_pop[0].idx, sorted_pop[0].acc)
+                            #Calculate flops and num_params for the best architecture
                             sorted_pop[0].bestGen = True
+                            model_best = self.create_model(sorted_pop[0])
+                            sorted_pop[0].flops = calculate_model_flops(model_best)
+                            sorted_pop[0].num_params = calculate_model_params(model_best)
                             reporter = ReportENAS()
                             #Save the best architecture in the report
                             reporter.save_arch_info(self, sorted_pop[0], isBest = True)
