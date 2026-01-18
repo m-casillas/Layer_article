@@ -1,0 +1,8 @@
+Super-IR
+20.15.203.32
+
+#Salir del docker
+CTRL+P CTRL+Q
+
+#Copiar algo del docker a la VM
+sudo docker cp TF-NAS2:/workspace/arch.txt /home/Super-IR

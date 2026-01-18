@@ -1,0 +1,16 @@
+,HHSE_ACC,HHSE_CROWD,HHSE_SUCCMUT,NONE_MPAR,NONE_MSWAP,NONE_NONE,SPC_MPAR,SPC_MSWAP,SPC_NONE,TPC_MPAR,TPC_MSWAP,TPC_NONE,UC_MPAR,UC_MSWAP,UC_NONE
+HHSE_ACC,Same,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected
+HHSE_CROWD,Not Rejected,Same,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected
+HHSE_SUCCMUT,Not Rejected,Not Rejected,Same,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected
+NONE_MPAR,Not Rejected,Not Rejected,Not Rejected,Same,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected
+NONE_MSWAP,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Same,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected
+NONE_NONE,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Same,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected
+SPC_MPAR,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Same,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected
+SPC_MSWAP,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Same,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected
+SPC_NONE,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Same,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected
+TPC_MPAR,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Same,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected
+TPC_MSWAP,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Same,Not Rejected,Not Rejected,Not Rejected,Not Rejected
+TPC_NONE,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Same,Not Rejected,Not Rejected,Not Rejected
+UC_MPAR,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Same,Not Rejected,Not Rejected
+UC_MSWAP,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Same,Not Rejected
+UC_NONE,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Not Rejected,Same

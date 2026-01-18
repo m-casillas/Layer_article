@@ -1,0 +1,7 @@
+Genetic_operators,Times_Used,Pareto_Appearances
+SPC_MPAR,11,53
+SPC_MSWAP,21,56
+TPC_MPAR,16,56
+TPC_MSWAP,15,59
+UC_MPAR,23,58
+UC_MSWAP,14,56
