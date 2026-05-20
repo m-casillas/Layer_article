@@ -97,7 +97,8 @@ class Plotter:
                     labels.append(combin)
             plt.figure(figsize=(10, 6))
             plt.title(f'Boxplot of {column} for all combinations')
-            plt.boxplot(measures, tick_labels = labels)
+            #plt.boxplot(measures, tick_labels = labels)
+            plt.boxplot(measures, labels = labels)
             plt.xticks(rotation=90, ha="right")
             plt.ylabel(column)
             plt.tight_layout()
@@ -118,11 +119,10 @@ class Plotter:
         if plot_bestarchs == True:
             self.to_be_plotted_folder = self.bestarchs_summaries_folder
             columns = self.columns_arch
-            
         else:
             self.to_be_plotted_folder = self.GAs_summaries_folder
             columns = self.columns_GA
-            
+           
         ensure_folder_exists(self.barplot_folder)
         ensure_folder_exists(self.to_be_plotted_folder)
 
@@ -138,10 +138,11 @@ class Plotter:
                     acc = df_mean[column].astype(float).iloc[0]
                     all_accuracies.append(acc)
                     #Get the cross and mut types from the filename
-                    parts = filename.split("_")
-                    result = "_".join(parts[:2])
-                    result += '_NSGA2' if is_HHSE_NSGA2(filename)[1] else ''
-                    result +=  '_HHSE' if is_HHSE_NSGA2(filename)[0] else ''
+                    result = filename.replace("_bestarch_summary.csv", "") if plot_bestarchs else filename.replace("_GA_summary.csv", "") #Only get SPC_MWSAP, or TPC_MPAR_NSGA2
+                    #result = parts.split("_")
+                    #result += '_NSGA2' if is_HHSE_NSGA2(filename)[1] else ''
+                    #result +=  '_HHSE' if is_HHSE_NSGA2(filename)[0] else ''
+                    #result += df['HHSE_TYPE'].unique()[0]
                     labels.append(result)
                     #labels.append(f"{filename}_{column}")
                     print(f'Processing {filename} done')
@@ -185,52 +186,50 @@ class Plotter:
             plt.clf()
             plt.close()
             print(f'Done\n')
-        
+
     def plot_convergence_exec(self):
-        #Plot convergence of accurracy. x-axis are generations. y-axis are accuracies. Lines are for each execution
-        #Each arch that had the best acc per generation is taken from the CSV file. Files should be splitted.
-        #Reads archs from a CSV file and saves the convergence plots.
+        """
+        Plot convergence curves per execution for multiple metrics.
+        X-axis: Generations
+        Y-axis: Metric value (Accuracy, HD_PB, HV, ...)
+        One line per execution.
+        """
         self.convergenceplots_bestarchs_folder = os.path.join(self.plot_folder, 'convergence_executions')
         ensure_folder_exists(self.convergenceplots_bestarchs_folder)
-        plot_folder = self.convergenceplots_bestarchs_folder
         folder = self.splitted_folder
-        print(folder)
         for filename in os.listdir(folder):
-            if filename.endswith(".csv"):
-                
-                filepath = os.path.join(folder, filename)
-                print(f'\nConvergence plots: Processing {filepath}')
-                df = pd.read_csv(filepath, encoding='utf-8')
-                #df_mut = df[df['isMutant'] == True]
-                df_bestacc = df[df['arch_status'] == 'BEST'] 
-                execList = df_bestacc['Execution'].unique()
-                generationList =  df_bestacc['Generation'].unique()
-                
-                max_accuracies = []
-                accuracies_table = []
-                for exec in execList:
-                    df_exec = df_bestacc[(df_bestacc['Execution'] == exec)]
-                    for generation in generationList:
-                        df_generation = df_exec[df_exec['Generation'] == generation]
-                        max_acc = df_generation['Accuracy'].max() #This is the only accuracy, since there is only one best per generation.
-                        max_accuracies.append(max_acc)
-                    accuracies_table.append(max_accuracies)
-                    max_accuracies = []
-                generationList = [str(g) for g in generationList]
-                for i in range(len(execList)):
-                    plt.plot(generationList, accuracies_table[i], label=f'Execution {i+1}')
+            if not filename.endswith(".csv"):
+                continue
+            filepath = os.path.join(folder, filename)
+            print(f'\nConvergence plots: Processing {filepath}')
+            df = pd.read_csv(filepath, encoding='utf-8')
+            df_best = df[df['arch_status'] == 'BEST']
+            exec_list = df_best['Execution'].unique()
+            generation_list = sorted(df_best['Generation'].unique())
+            generation_labels = [str(g) for g in generation_list]
+            for column in config_tecnas.plot_convergency_columns:
+                if column not in df_best.columns:
+                    print(f'Column "{column}" not found in {filename}, skipping.')
+                    continue
+                plt.figure()
+                for exec_id in exec_list:
+                    df_exec = df_best[df_best['Execution'] == exec_id]
+                    values_per_gen = []
+                    for gen in generation_list:
+                        df_gen = df_exec[df_exec['Generation'] == gen]
+                        values_per_gen.append(df_gen[column].max())
+                    plt.plot(generation_labels, values_per_gen, label=f'Execution {exec_id}')
                 plt.xlabel('Generation')
-                plt.ylabel('Accuracy')
-                plt.title(f'Convergence of Accuracy per Generation {filename[:-4]}')
+                plt.ylabel(column)
+                plt.title(f'Convergence of {column} per Generation\n{filename[:-4]}')
                 plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left')
-                
-                plot_figure_path = os.path.join(plot_folder, f'{os.path.basename(filename[:-4])}_convergence.png') 
-                plt.savefig(plot_figure_path)
-                plt.savefig(plot_figure_path, bbox_inches='tight', dpi=200)  # Increased DPI for clarity
+                plot_path = os.path.join(self.convergenceplots_bestarchs_folder, f'{filename[:-4]}_convergence_{column}.png')
+                plt.savefig(plot_path, bbox_inches='tight', dpi=200)
                 plt.clf()
                 plt.close()
-                print(f'Saving {plot_figure_path} done')
+                print(f'Saving {plot_path} done')
         print('Convergence Plots... done')
+   
 
     def plot_acc_loss_arch(self):
         #Reads archs from a CSV file and saves the convergence plots..
@@ -260,6 +259,174 @@ class Plotter:
                     plt.clf()
                     plt.close()
                     print(f'Saving {plot_path} done')
+
+    
+    def plot_generation_status(self, k_best=10):
+        def compute_tendency(values, window=5):
+            n = len(values)
+            window = max(3, int(0.1 * n))
+            tendency = pd.Series(values).rolling(window, center=True, min_periods=1).mean().to_numpy()
+            return tendency
+
+        def find_best_point(values, generations, mode="max"):
+            idx = np.nanargmax(values) if mode == "max" else np.nanargmin(values)
+            return generations[idx], values[idx], idx
+
+        columns = config_tecnas.plot_convergency_generation_status_columns
+        self.generation_status_folder = os.path.join(self.plot_folder, 'generation_status')
+        ensure_folder_exists(self.generation_status_folder)
+
+        # --- Step 1: Load all generation_status files ---
+        all_data = {}  # {filename_stem: {'df': df, 'df0': df0, 'generations': ..., 'search_name': ...}}
+        for filename in os.listdir(self.splitted_folder):
+            if 'generation_status' in filename:
+                filepath = os.path.join(self.splitted_folder, filename)
+                print(f'\nGeneration status plots: Loading {filepath}')
+                df0 = pd.read_csv(filepath, encoding='utf-8')
+                print(f'  Loaded {filename} with columns: {df0.columns.tolist()}')
+                df = df0.groupby('Generation').mean(numeric_only=True).reset_index()
+                stem = filename[:-4]
+                all_data[stem] = {
+                    'df': df,
+                    'df0': df0,
+                    'generations': df["Generation"].values,
+                    'search_name': df0["search_name"].iloc[0],
+                }
+
+        k_colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple',
+                    'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
+
+        # --- Step 2: For each metric, rank operators by global AUC and plot k-best together ---
+        for column in columns:
+            mode = columns[column][1]
+            col_type = columns[column][0]
+
+            # Compute global AUC per operator for this column
+            operator_aucs = []
+            for stem, data in all_data.items():
+                df = data['df']
+                generations = data['generations']
+                try:
+                    if col_type == 'stats':
+                        y_values = df[f'mean_{column}'].values
+                    else:
+                        y_values = df[column].values
+                    auc = np.trapz(y_values, generations)
+                    operator_aucs.append((auc, stem, data))
+                except KeyError:
+                    print(f'  Column {column} not found in {stem}, skipping.')
+                    continue
+
+            if not operator_aucs:
+                continue
+
+            # Rank by AUC (descending for max, ascending for min)
+            operator_aucs.sort(key=lambda x: x[0], reverse=(mode == "max"))
+            top_k = operator_aucs[:k_best]
+
+            # --- Plot all k-best operators in one figure ---
+            fig, ax = plt.subplots(figsize=(10, 6))
+            for rank, (auc_val, stem, data) in enumerate(top_k):
+                color = k_colors[rank % len(k_colors)]
+                df = data['df']
+                generations = data['generations']
+                search_name = data['search_name']
+
+                if col_type == 'stats':
+                    mean_values = df[f'mean_{column}'].values
+                    std_values = df[f'std_{column}'].values
+                    y_values = mean_values
+                    tendency = compute_tendency(mean_values)
+                    ax.errorbar(generations, mean_values, yerr=std_values, fmt='o', color=color,
+                                ecolor=color, capsize=4, elinewidth=1, alpha=0.4, zorder=1)
+                    ax.fill_between(generations, mean_values - std_values, mean_values + std_values,
+                                    alpha=0.1, color=color)
+                else:
+                    y_values = df[column].values
+                    tendency = compute_tendency(y_values)
+                    ax.scatter(generations, y_values, marker='o', color=color, alpha=0.4, zorder=1)
+
+                best_gen, best_val, _ = find_best_point(tendency, generations, mode)
+                ax.plot(generations, tendency, '--', color=color, linewidth=2,
+                        label=f"[#{rank+1} AUC={auc_val:.4f}] {search_name}", zorder=3)
+                ax.scatter(best_gen, best_val, color=color, marker='x', s=200, zorder=4)
+                ax.axvline(best_gen, linestyle=':', color=color, alpha=0.5, zorder=0)
+                ax.axhline(best_val, linestyle=':', color=color, alpha=0.5, zorder=0)
+
+            ax.set_title(f'Top-{k_best} Operators by AUC — {column}')
+            ax.set_xlabel("Generation")
+            ax.set_ylabel(column)
+
+            all_gens = np.concatenate([data['generations'] for _, _, data in top_k])
+            ax.set_xticks(np.arange(min(all_gens), max(all_gens) + 1, 4))
+            ax.grid(True, linestyle='--', alpha=0.5)
+            ax.legend(fontsize=8, loc='best')
+            plt.tight_layout()
+
+            # Save in a dedicated k-best folder per metric
+            kbest_folder = os.path.join(self.generation_status_folder, f'top{k_best}_by_auc')
+            ensure_folder_exists(kbest_folder)
+            figname = os.path.join(kbest_folder, f'top{k_best}_{column}.png')
+            plt.savefig(figname, dpi=300)
+            plt.close()
+            print(f'  Saved top-{k_best} AUC plot for {column} → {figname}')
+        return
+        # --- Step 3: Also produce individual plots as before ---
+        for stem, data in all_data.items():
+            df = data['df']
+            df0 = data['df0']
+            generations = data['generations']
+            for column in columns:
+                col_type = columns[column][0]
+                mode = columns[column][1]
+                plt.figure(figsize=(8, 6))
+                if col_type == 'stats':
+                    mean_values = df[f'mean_{column}'].values
+                    std_values = df[f'std_{column}'].values
+                    tendency = compute_tendency(mean_values)
+                    plt.errorbar(generations, mean_values, yerr=std_values, fmt='o', color='blue',
+                                ecolor='lightcoral', capsize=4, elinewidth=1, alpha=0.6,
+                                label=f"Mean {column} with Std Dev", zorder=1)
+                    y_min = np.nanmin(mean_values - std_values)
+                    y_max = np.nanmax(mean_values + std_values)
+                    plt.ylim(y_min, y_max)
+                    y_values = mean_values
+                else:
+                    values = df[column].values
+                    tendency = compute_tendency(values)
+                    plt.scatter(generations, values, marker='o', color='blue', alpha=0.6,
+                                label=f"{column} per Generation", zorder=1)
+                    y_values = values
+
+                auc = np.trapz(y_values, generations)
+                best_gen, best_val, _ = find_best_point(tendency, generations, mode)
+                plt.plot(generations, tendency, 'k--', linewidth=3, label="Tendency", zorder=3)
+                plt.scatter(best_gen, best_val, color='red', marker='x', s=200,
+                            label=f"Best {column}", zorder=4)
+                plt.axvline(best_gen, linestyle='--', color='black', zorder=0)
+                plt.axhline(best_val, linestyle='--', color='black', zorder=0)
+                plt.title(f'{data["search_name"]} - {column} per Generation')
+                plt.xlabel("Generation")
+                plt.ylabel(column)
+                plt.xticks(np.arange(min(generations), max(generations) + 1, 4))
+                plt.grid(True, linestyle='--', alpha=0.5)
+                plt.text(0.02, 0.95, f"AUC = {auc:.4f}", transform=plt.gca().transAxes,
+                        fontsize=10, verticalalignment='top',
+                        bbox=dict(boxstyle="round", facecolor="white", alpha=0.7))
+                plt.legend()
+                plt.tight_layout()
+
+                fig_folder_per_name = os.path.join(self.generation_status_folder, stem)
+                ensure_folder_exists(fig_folder_per_name)
+                plt.savefig(os.path.join(fig_folder_per_name, f'{stem}_{column}.png'), dpi=300)
+                fig_folder_per_metric = os.path.join(self.generation_status_folder, column)
+                ensure_folder_exists(fig_folder_per_metric)
+                plotname = os.path.join(fig_folder_per_metric, f'{stem}_{column}.png')
+                print(f'Saving {plotname}')
+                plt.savefig(plotname, dpi=300)
+                plt.close()
+
+        print('Generation Status Plots... done')
 
     def __init__(self, experiment_folder):
         os.system("cls")

@@ -6,6 +6,17 @@ from Architecture import *
 #Architecture is a deep neural network consisting in the input, conv layer, pooling layer, conv layer, pooling layer, fully connected layer
 #gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':[-1,2]}, {'CONV':[64,3]}, {'POOLMAX':[-1,2]}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
 class LayerRepresentation(Architecture):
+    def integer_encoding_to_real_encoding(self):
+        self.real_encoding = []
+        for layer_int in self.integer_encoding:
+            layer_real = layer_int + random.random()
+            self.real_encoding.append(layer_real)
+
+    def real_encoding_to_integer_encoding(self):
+        self.integer_encoding = []
+        for layer_real in self.real_encoding:
+            layer_int = int(layer_real)
+            self.integer_encoding.append(layer_int)
 
     def integer_encoding_to_binary_encoding(self, maxInt):
         self.binary_encoding = []
@@ -97,6 +108,11 @@ class LayerRepresentation(Architecture):
         else:
             self.integer_encoding = self.genList_to_integer_vector()
             self.integer_size = len(self.integer_encoding)
-            if encoding == 'BV':
+            if encoding == 'BIN':
                 self.integer_encoding_to_binary_encoding(Globals.INDEXES_DENSES[-1])
+            elif encoding == 'REAL':
+                self.integer_encoding_to_real_encoding()
+            else:
+                print(f'ERROR: Encoding type {encoding} not recognized')
+                self.integer_encoding = []
 

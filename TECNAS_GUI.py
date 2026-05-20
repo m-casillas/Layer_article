@@ -1,5 +1,6 @@
 
 import FreeSimpleGUI as sg
+
 from file_handler import split_all_csvs_in_folder, merge_csv_files, ensure_folder_exists, split, merge
 from ReportENAS import ReportENAS
 from PlotterENAS import Plotter
@@ -27,6 +28,7 @@ def summarize_indicators_folder(experiment_folder = '', archs_info = True):
 
         
 def train_surrogates_folder(individual_archs_CSV_folder, model_choice):
+    
     merge(individual_archs_CSV_folder)
     regressor_folder = os.path.join(individual_archs_CSV_folder, 'regressors')
     merged_path = os.path.join(individual_archs_CSV_folder, 'merged.csv')
@@ -62,6 +64,7 @@ def plotsFrame():
               [sg.Check('Summarized measures', key = 'CHK_SUMMARIES_PLOTS'), sg.Check('Best archs', key = 'CHK_BESTARCHS_SUMMARIZE_PLOTS'), sg.Check('GAs', key = 'CHK_GAS_SUMMARIZE_PLOTS')], 
               [sg.Check('Convergence single archs', key = 'CHK_CONV_SINGLEARCHS_PLOT')], 
               [sg.Check('Convergence per Execution', key = 'CHK_CONVERGENCE_EXEC_PLOT')],
+              [sg.Check('Generation status', key = 'CHK_GENERATION_STATUS_PLOT')],
               [sg.Check('Medians', key = 'CHK_MEDIANS_PLOT')],
               [sg.Check('Boxplots', key = 'CHK_BOXPLOTS')],
               [sg.Button('Plot', key = 'BTN_PLOT')]]
@@ -164,6 +167,9 @@ def main():
             if values['CHK_BOXPLOTS']:
                 plotter.boxplot_from_folder()
                 sg.popup('Boxplots created successfully!')
+            if values['CHK_GENERATION_STATUS_PLOT']:
+                plotter.plot_generation_status()
+                sg.popup('Generation status plots created successfully!')
 
         elif event == 'BTN_TRAIN_SURROGATES':
             train_surrogates_folder(values['surrogate_input_folder'], int(values['SLD_MODEL_CHOICE']))
@@ -191,7 +197,7 @@ def main():
             split(values['all_input_folder'])
             print('====== Splitting completed!======\n')
             print(f'====== Correlation matrix ======' )
-            correlation_matrix_folder(values['all_input_folder'])
+            #correlation_matrix_folder(values['all_input_folder'])
             print('====== Correlation matrix completed!======\n')
             print(f'====== Correlation matrix per execution ======' )
             #correlation_matrix_execution(values['all_input_folder'])
@@ -218,7 +224,7 @@ def main():
             plotter.plot_measures_from_folder(plot_bestarchs = False)
             print('======Plotting GAs measures completed!======\n')
             print(f'====== Wilcoxon test ======' )
-            Wilcoxon_ENAS(values['all_input_folder'])
+            #Wilcoxon_ENAS(values['all_input_folder'])
             print('====== Wilcoxon test completed!======\n')
             sg.popup('All processes completed successfully!')
 
@@ -257,11 +263,9 @@ default_experiment_path = r'C:\Users\xaero\OneDrive\ITESM DCC\Layer_article\resu
 #default_experiment_path = os.getcwd()
 #default_input_path = ''
 default_input_path = default_experiment_path
-#os.system("cls")
-#print(os.getcwd())
-#split()
 
 main()
 
 #df_full_path = r'C:\Users\xaero\OneDrive\ITESM DCC\Layer_article\results\test_experiment\merged.csv'
+
 

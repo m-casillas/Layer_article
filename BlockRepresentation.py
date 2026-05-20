@@ -1,7 +1,8 @@
 from LayerRepresentation import LayerRepresentation
+from Architecture import *
 from globalsENAS import *
 
-class BlockRepresentation(LayerRepresentation):
+class BlockRepresentation(Architecture):
     
     @staticmethod
     def create_list_blocks(NCONV_PERBLOCK = ConfigBlocks.NCONV_PERBLOCK):
@@ -9,7 +10,7 @@ class BlockRepresentation(LayerRepresentation):
         all_blocks = []
         for combo in itertools.product(Globals.all_convs, repeat = NCONV_PERBLOCK):
             all_blocks.append(combo)
-        print3(f'Number of possible blocks ({NCONV_PERBLOCK} CONV per block): {len(all_blocks)}')
+        print(f'Number of possible blocks ({NCONV_PERBLOCK} CONV per block): {len(all_blocks)}')
         #First block is  ({'CONV': [32, 3]}, {'CONV': [32, 3]})
         return all_blocks #List of tuples of N dictionaries
     
@@ -48,7 +49,30 @@ class BlockRepresentation(LayerRepresentation):
             return BlockRepresentation.all_blocks.index(block[:ConfigBlocks.NCONV_PERBLOCK])
         else:
             return BlockRepresentation.all_blocks.index(block)
+        
+    def integer_encoding_to_real_encoding(self):
+        self.real_encoding = []
+        for layer_int in self.integer_encoding:
+            layer_real = layer_int + random.random()
+            self.real_encoding.append(layer_real)
+
+    def real_encoding_to_integer_encoding(self):
+        self.integer_encoding = []
+        for layer_real in self.real_encoding:
+            layer_int = int(layer_real)
+            self.integer_encoding.append(layer_int)
     
+    def integer_encoding_to_binary_encoding(self, maxInt):
+        self.binary_encoding = []
+        for layer_int in self.integer_encoding:
+            layer_bin = int_to_gray(layer_int, maxInt)
+            self.binary_encoding.append(layer_bin)
+
+    def binary_encoding_to_integer_encoding(self):
+        self.integer_encoding = []
+        for layer_bin in self.binary_encoding:
+            layer_int = gray_to_int(layer_bin)
+            self.integer_encoding.append(layer_int)
         
     def genList_to_integer_vector(self):
         #Represents the gen list (list of dictionaries) as an integer vector. The input and the last Dense layer are not included.
@@ -66,6 +90,25 @@ class BlockRepresentation(LayerRepresentation):
                 integer_vector.append(None)
                                 
         return integer_vector
+
+    def integer_vector_to_genList(self, integer_vector):
+        #Given an integer vector, returns the gen list (list of dictionaries). The input, the GLOBAL and the last Dense layer are not included in the integer vector.
+        gen_list = []
+        block_count = 0
+        for chromosome in self.genotype.gen_list:
+            if isinstance(chromosome, dict): #it's a layer, not included in the integer vector.
+                gen_list.append(chromosome)
+            elif isinstance(chromosome, tuple): #it's a block
+                block_idx = integer_vector[block_count]
+                #print(f'Block index: {block_idx}')
+                block = BlockRepresentation.all_blocks[block_idx]
+                gen_list.append(block)
+                block_count += 1
+            else:
+                print('integer_vector_to_genList: Unidentified chromosome.')
+                gen_list.append(None)
+                                
+        return gen_list
 
     def residual_block(self, x, list_filters, list_kernels, pool = False, stride=1, training=True):
         shortcut = x
@@ -115,6 +158,23 @@ class BlockRepresentation(LayerRepresentation):
         
 
 
-    def __init__(self, encoding_type = ConfigClass.ENCODING_TYPE, idx = 9999, genotypeObj = None):
-        super().__init__(encoding = encoding_type, idx = idx, genotypeObj = genotypeObj)
+    #def __init__(self, encoding_type = ConfigClass.ENCODING_TYPE, idx = 9999, genotypeObj = None):
+    #    super().__init__(encoding = encoding_type, idx = idx, genotypeObj = genotypeObj)
+
+    def __init__(self, encoding = ConfigClass.ENCODING_TYPE, idx = 9999, genotypeObj = None):
+        super().__init__(encoding, idx, genotypeObj)
+        if is_None_or_empty(genotypeObj):
+            self.integer_encoding = []
+        else:
+            self.integer_encoding = self.genList_to_integer_vector()
+            self.integer_size = len(self.integer_encoding)
+            if encoding == 'BIN':
+                self.integer_encoding_to_binary_encoding(len(BlockRepresentation.all_blocks)-1)
+            elif encoding == 'REAL':
+                self.integer_encoding_to_real_encoding()
+            else:
+                print(f'ERROR: Encoding type {encoding} not recognized')
+                self.integer_encoding = []
+
+
 

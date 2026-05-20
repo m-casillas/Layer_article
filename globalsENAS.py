@@ -57,6 +57,10 @@ from sklearn.model_selection import train_test_split
 from pympler import asizeof
 import tracemalloc
 
+def delete_columns_dict(dictionary, listofKeys_to_remove):
+    #Returns a new dictionary without the specified keys.
+    return {k: v for k, v in dictionary.items() if k not in listofKeys_to_remove}
+
 def reset_columns_dict(dictionary, reset_columns):
     #All columns in reset_columns will be set to np.nan in the dictionary
     for col in reset_columns:
@@ -217,8 +221,8 @@ def filter_csv(df_folder_path = '', df = None, generation = 'ALL', arch_status =
     else:
         for filename in os.listdir(df_folder_path):
             if filename.endswith(".csv"):
-                if 'filtered' in filename:
-                    print(f'Skipping {filename} because it is already filtered.')
+                if ('filtered' in filename) or ('generation' in filename):
+                    print(f'Skipping {filename} because it is already filtered or is the generation file')
                     continue
                 df_full_path = os.path.join(df_folder_path, filename)
                 print(f'Filtering {df_full_path}')
@@ -517,29 +521,34 @@ class BLOCKS_CONSTANTS:
     SPC_INDEXES = list(range(2,SIZE_GENLIST-2)) #All blocks in between. Skip the INPat the beginning and GLOBAL and DENSE at the end.
     MUTABLE_BCHANGEPARAM_INDEXES = SPC_INDEXES
     MUTABLE_BSWAP_INDEXES = SPC_INDEXES
+    #MUTABLE_LPOLY_INDEXES = 
+
 
 class LAYERS_CONSTANTS:
-    #        0                 1                 2                 3                 4                           5                 6                 7                 8                        9        
-    #[{'INP': 32}, {'CONV': [32, 3]}, {'POOLMAX': [-1, 3]}, {'CONV': [256, 3]}, {'POOLMAX': [-1, 3]}, {'CONV': [32, 5]}, {'CONV': [128, 5]}, {'FLATTEN': None}, {'DENSE': [64, 'relu']}, {'DENSE': [10, 'softmax']}]
-    #[{'INP': 32}, {'CONV': [64, 3]}, {'POOLMAX': [-1, 5]}, {'CONV': [128, 3]}, {'POOLMAX': [-1, 5]}, {'CONV': [16, 5]}, {'CONV': [128, 5]}, {'FLATTEN': None}, {'DENSE': [64, 'relu']}, {'DENSE': [10, 'softmax']}]
-    SIZE_GENLIST = 10
-    SIZE_LAYERGEN = 7
-    NUM_FIXED_LAYERS = 5 #NUMBER OF FIXED LAYERS (INPUT, CONV AND FLATTEN DENSE DENSE) ===========================================================================================
-    NUM_MUTABLE_LAYERS = NUM_FIXED_LAYERS + 2 # (add the first CONV, last POOL and before last DENSE)
-    #Set what layers in the gen_list may undergo changes.===========================================================
-    k = SIZE_GENLIST-NUM_FIXED_LAYERS #Number of layers between INP, CONV and FLATTEN, DENSE, DENSE
-    #All layers can change parameters, except the first one, FLATTEN and the last DENSE layer
+    #        0         1        2     3      4      5        6            7             8             9
+    # [{'INP':32}, {'CONV'}, {mut}, {mut}, {mut}, {mut}, {'POOL'}, {'FLATTEN':None}, {'DENSE'}, {'LAST_DENSE'}]
 
-    k1 = k + 2 #All layers inbetween, plus the first CONV, plus the one before the last DENSE layer
-    MUTABLE_LCHANGEPARAM_INDEXES = list(range(1, k1)) + [k1 + 1]
-    
-    #All layers can change type, except the first one, the CONV the FLATTEN and the two last DENSE layers
-    k2 = SIZE_GENLIST-NUM_FIXED_LAYERS #Number of layers between INP, CONV and FLATTEN, DENSE, DENSE
-    MUTABLE_LCHANGETYPE_INDEXES  = list(range(2, 2 + k))
+    SIZE_GENLIST    = 10
+    SIZE_LAYERGEN   = 7
 
-    MUTABLE_LBITFLIP_INDEXES = MUTABLE_LCHANGETYPE_INDEXES
-    #INDEXES FOR CROSSOVER
-    SPC_INDEXES = list(range(1, 2 + k))
+    # Fixed (never mutate): INP=0, first CONV=1, FLATTEN=7, LAST_DENSE=9
+    NUM_FIXED_LAYERS   = 4
+    # Mutable indexes: conv/pool zone [2..6] + DENSE [8] = 6 layers
+    NUM_MUTABLE_LAYERS = 6
+
+    # Change parameters: all mutable layers (conv/pool zone + DENSE)
+    MUTABLE_LCHANGEPARAM_INDEXES = [1, 2, 3, 4, 5, 6, 8]
+    MUTABLE_LSWAP_INDEXES = [2, 3, 4, 5]
+
+    # Bit-flip: same as change-type (DENSE has no integer encoding in the mutable zone)
+    MUTABLE_LBITFLIP_INDEXES     = [2, 3, 4, 5, 6]
+
+
+    # Crossover cut points: anywhere from after the fixed CONV up to and including DENSE
+    # (index 1 is fixed so cuts start at 2; index 8 is the last mutable layer)
+    SPC_INDEXES = list(range(2, 7))
+
+    MAX_POOLS = 2
     #==============================================================================================================
 
 class ConfigClass:
@@ -703,14 +712,13 @@ Globals.INDEXES_CONVS = indexes_layers[0] #0 to 7 in Globals.all_layers
 Globals.INDEXES_POOLS = indexes_layers[1] #8 and 9
 Globals.INDEXES_DENSES = indexes_layers[2] #10 to 12
 
-
 #This is used for the mutate_layer_parameters method
 LAYER_DICTS_ASSOCIATION = {'CONV':Globals.CONV_KERNELS, 'POOLMAX':Globals.POOL_KERNELS, 'POOLAVG':Globals.POOL_KERNELS, 'DENSE':Globals.DENSE_NEURONS}
 ARCH_NAMES_LIST = generate_letter_list()
 
 # Get current date and hour
 now = datetime.now()
-formatted_time = now.strftime("%Y-%m-%d_%H-%M")
+formatted_time = now.strftime("%Y-%m-%d_%H-%M-%S")
 # Create filename
 architecture_filename_noCSV  = f"{formatted_time}"
 

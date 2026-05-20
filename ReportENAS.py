@@ -53,18 +53,29 @@ class ReportENAS:
                 filepath = os.path.join(input_folder, input_file)
                 print(f'Preparing to summarize performance indicators... {archs_info = }')
                 print(f'Loading {filepath}')
-                columns = ['Execution'] + (self.arch_columns if archs_info == True else self.GA_columns)
+                columns = ['Execution'] + (self.arch_columns if archs_info == True else  ['Generation'] + self.GA_columns)
                 df = pd.read_csv(filepath, encoding='utf-8')
                 exec_list = df['Execution'].unique()
+                generation_list = df['Generation'].unique()
                 table = []
                 #Add all best arch's performance indicators per execution
                 for exec in exec_list:
                     #exec = 1
                     #Obtain a dafatrame per execution, only best archs
-                    df_bestexec = df[(df['Execution'] == exec) & (df['arch_status'] == 'BEST') & (df['Generation'] == df['Generation'].max())]
-                    row = [exec]
-                    for column in columns[1:]: #Skip execution
-                        row.append(df_bestexec[column].values[0])
+                    if archs_info: #Only add info from the best architecture at the end of the execution.
+                        df_bestexec = df[(df['Execution'] == exec) & (df['arch_status'] == 'BEST') & (df['Generation'] == df['Generation'].max())]
+                        row = [exec]
+                        for column in columns[1:]: #Skip execution column
+                            row.append(df_bestexec[column].values[0])
+                    else: #GA info, it should be for each generation, best archs.
+                        df_bestexec = df[(df['Execution'] == exec) & (df['arch_status'] == 'BEST')]
+                        for gen in generation_list:
+                            df_bestgen = df_bestexec[df_bestexec['Generation'] == gen]
+                            row = [exec, gen]
+                            for column in columns[2:]:  #Skip execution column and generation.
+                                row.append(df_bestgen[column].values[0])
+                            table.append(row)
+
                     table.append(row)
                 #Add mean and std at the end
                 table = self.calculate_mean_std(table, columns, True)
@@ -77,6 +88,15 @@ class ReportENAS:
                 df_final.to_csv(report_path, index = False)
                 print(f'Report saved as {report_path}')
                 print('Done\n')
+
+    def save_generation_status(self, statusObj):
+        #path_report = os.path.join(path, 'generation_status.csv')
+        path_report = os.path.join(statusObj.path_report, f'{statusObj.tecnasObj.pop[0].path_filereport[:-4]}_generation_status.csv')
+        print(f'Saving generation status to {path_report}')
+        header_written = os.path.exists(path_report)
+        df = pd.DataFrame(statusObj.dict_archinfo)
+        df.to_csv(path_report,  mode="a",  header = not header_written, index=False)
+        header_written = True
 
     def save_arch_info(self, tecnasObj, arch = None, epochs = ConfigClass.EPOCHS):
         
@@ -99,6 +119,7 @@ class ReportENAS:
              'isMutant': arch.isMutant,
              'Integer_encoding': str(arch.integer_encoding),
              'Binary_encoding': str(arch.binary_encoding),
+             'Real_encoding': str(arch.real_encoding),
              'Genotype': str(arch.genotype.gen_list), 
              'Crossover_type': tecnasObj.crossover_type if tecnasObj.HHSE == False else 'HHSE',
              'Mutation_type': (tecnasObj.mutation_type  if not tecnasObj.HHSE  else ("NSGA2" if config_tecnas.NSGA2 else "-")),
@@ -129,32 +150,33 @@ class ReportENAS:
              'Succ_Mutation': tecnasObj.succ_mut,
              'Total_Crossovers': tecnasObj.total_cross,
              'Total_Mutations': tecnasObj.total_mut,
-             'Succ_Crossover_ratio': succ_cross_ratio if tecnasObj.HHSE == False else arch.succ_cross_ratio, #Because in HSSE, ratios are reseted.
-             'Succ_Mutation_ratio': succ_mut_ratio if tecnasObj.HHSE == False else arch.succ_mut_ratio,
+             'Succ_Crossover_ratio': succ_cross_ratio, 
+             'Succ_Mutation_ratio': succ_mut_ratio,
              'arch_status': arch.archStatus,
              'Trained_Completely':False,
              'Has_CM':False,
-             'Confusion_matrix': str(arch.cm),
-             'cm_accuracy': arch.cm_accuracy,
-             'cm_precision_macro': arch.cm_precision_macro,
-             'cm_recall_macro': arch.cm_recall_macro,
-             'cm_f1_macro': arch.cm_f1_macro,
+             #'Confusion_matrix': str(arch.cm),
+             #'cm_accuracy': arch.cm_accuracy,
+             #'cm_precision_macro': arch.cm_precision_macro,
+             #'cm_recall_macro': arch.cm_recall_macro,
+             #'cm_f1_macro': arch.cm_f1_macro,
              'Ranking': '',
              'NSGA2': config_tecnas.NSGA2,
-             'HHSE': tecnasObj.HHSE,
-             'Objectives': str(tecnasObj.objective_maxmin_names) if tecnasObj.HHSE == True else '',
-             'RAM': str(tecnasObj.RAM),
-             'Improved': f'{tecnasObj.crossover_type}_{tecnasObj.mutation_type}' if arch.dPB > 1 and tecnasObj.dHV > 0 else 'NONE',
-             'Chosen_operator': f'{tecnasObj.crossover_type}_{tecnasObj.mutation_type}'
+             'HHSE': tecnasObj.HHSE,  
+             'HHSE_TYPE': f'MARKOV{"COMBINED" if tecnasObj.COMBINED_MARKOV else tecnasObj.markov_type}' if config_tecnas.HHSE_MARKOV else 'RANDOM' if config_tecnas.HHSE_RANDOM else 'GREEDY' if config_tecnas.HHSE_GREEDY else '',
+             #'RAM': str(tecnasObj.RAM),
+             #'CPU': str(tecnasObj.CPU),
+             'Chosen_operator': f'{tecnasObj.crossover_type}_{tecnasObj.mutation_type}',
+             'Selected_by': tecnasObj.selected_by,
+             'search_name': tecnasObj.search_name
             }
 
         if config_tecnas.REPORT_ALL_COLUMNS == True:
             arch_info = dict_archinfo.copy()
         else:
-            print('Removing unnecesary columns')
-            reset_columns = ['Epochs', 'Accuracy_history', 'Top1', 'Top5', 'Loss', 'SizeMB', 'Loss_history', 'CPU_Sec', 'P1_idx', 'P2_idx', 'P1', 'P2', #'Before_Mut', 
-                              'Succ_Crossover', 'Succ_Mutation', 'Total_Crossovers', 'Total_Mutations', 'Was_invalid', 'cm_accuracy', 'cm_precision_macro',  'cm_recall_macro', 'cm_f1_macro', 'Objectives','Confusion_matrix']
-            arch_info = reset_columns_dict(dict_archinfo, reset_columns)
+            print2('Removing unnecesary columns')
+            arch_info = reset_columns_dict(dict_archinfo, config_tecnas.remove_report_columns)
+
         self.header_written = os.path.exists(arch.path_filereport)
         self.buffer.append(arch_info)
         if len(self.buffer) >= self.BATCH_SIZE:
