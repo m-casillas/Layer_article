@@ -1,0 +1,17 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Experiment outputs
+architectures/
+results/
+
+# Temporary files
+*.log
+
+# IDE settings
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
