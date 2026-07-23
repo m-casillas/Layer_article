@@ -1,7 +1,7 @@
 
 import FreeSimpleGUI as sg
 
-from file_handler import split_all_csvs_in_folder, merge_csv_files, ensure_folder_exists, split, merge
+from file_handler import split_all_csvs_in_folder, merge_csv_files, ensure_folder_exists, split, merge, organize_csv
 from ReportENAS import ReportENAS
 from PlotterENAS import Plotter
 from globalsENAS import *
@@ -52,24 +52,43 @@ def mergeFrame():
     frm = sg.Frame('Merge CSVs', layout)
     return frm
 
+def organizerFrame():
+    layout = [[sg.Text('Experiment Folder'), sg.InputText(default_input_path,key='organizer_input_folder', size = (None, 10)), sg.FolderBrowse(initial_folder=default_experiment_path)],
+              [sg.Check('CROSS', key = 'CHK_CROSS'), sg.Check('MUT', key = 'CHK_MUT'), sg.Check('CROSS_MUT', key = 'CHK_CROSS_MUT'), sg.Check('Only window', key = 'CHK_ONLY_WINDOW')],
+              [sg.Button('Organize', key = 'BTN_ORGANIZE')]]
+    frm = sg.Frame('Organize CSVs', layout)
+    return frm
+
 def summarizeFrame():
     layout = [[sg.Text('Experiment Folder'), sg.InputText(default_input_path,key='summarize_input_folder', size = (None, 10)), sg.FolderBrowse(initial_folder=default_experiment_path)],
               [sg.Check('Best archs', key = 'CHK_BEST_ARCHS'), sg.Check('GAs', key = 'CHK_GAS')],
               [sg.Button('Summarize', key = 'BTN_SUMMARIZE')]]
     frm = sg.Frame('Summarize', layout)
     return frm
+def csvToolsFrame():
+    layout = [ [splitFrame()], [mergeFrame()], [organizerFrame()], [summarizeFrame()]]
+    return sg.Frame('CSV Tools', layout)
 
 def plotsFrame():
-    layout = [[sg.Text('Experiment Folder'), sg.InputText(default_input_path,key='plots_input_folder', size = (None, 10)), sg.FolderBrowse(initial_folder=default_experiment_path)],
-              [sg.Check('Summarized measures', key = 'CHK_SUMMARIES_PLOTS'), sg.Check('Best archs', key = 'CHK_BESTARCHS_SUMMARIZE_PLOTS'), sg.Check('GAs', key = 'CHK_GAS_SUMMARIZE_PLOTS')], 
-              [sg.Check('Convergence single archs', key = 'CHK_CONV_SINGLEARCHS_PLOT')], 
-              [sg.Check('Convergence per Execution', key = 'CHK_CONVERGENCE_EXEC_PLOT')],
-              [sg.Check('Generation status', key = 'CHK_GENERATION_STATUS_PLOT')],
-              [sg.Check('Medians', key = 'CHK_MEDIANS_PLOT')],
-              [sg.Check('Boxplots', key = 'CHK_BOXPLOTS')],
-              [sg.Button('Plot', key = 'BTN_PLOT')]]
-    frm = sg.Frame('Plots', layout)
-    return frm
+    generation_status_frame = sg.Frame('Generation Status', [ [
+        sg.Check('Generation status', key='CHK_GENERATION_STATUS_PLOT')],
+        [
+        sg.Check('Individual gstatus plots', key='CHK_GSTATUS_INDIVIDUAL'),
+        sg.Check('Top_K gstatus plots', key='CHK_GSTATUS_TOP_K')],
+        [sg.Check('Gen Status all subfolders', key='CHK_GENERATION_STATUS_SUBFOLDERS'),sg.Check('Grouped gstatus plot (no window)', key='CHK_GSTATUS_GROUPED'), sg.Check('Win Method (special markers)', key = 'CHK_WIN_METHOD'),
+         sg.Check('Slice generations', key = 'CHK_SLICE_GENERATIONS')]
+    ])
+    layout = [
+        [sg.Text('Experiment Folder'), sg.InputText(default_input_path, key='plots_input_folder', size=(None, 10)), sg.FolderBrowse(initial_folder=default_experiment_path)],
+        [sg.Check('Summarized measures', key='CHK_SUMMARIES_PLOTS'), sg.Check('Best archs', key='CHK_BESTARCHS_SUMMARIZE_PLOTS'), sg.Check('GAs', key='CHK_GAS_SUMMARIZE_PLOTS')],
+        [sg.Check('Convergence single archs', key='CHK_CONV_SINGLEARCHS_PLOT')],
+        [sg.Check('Convergence per Execution', key='CHK_CONVERGENCE_EXEC_PLOT'), sg.Check('Convergence grouped', key='CHK_CONVERGENCE_GROUPED')],
+        [sg.Check('Medians', key='CHK_MEDIANS_PLOT')],
+        [sg.Check('Boxplots', key='CHK_BOXPLOTS')],
+        [generation_status_frame],
+        [sg.Button('Plot', key='BTN_PLOT')]
+    ]
+    return sg.Frame('Plots', layout)
 
 def allFrame():
     txt1 = sg.Text('Split - summarize - plots - Wilcoxon - Correlation')
@@ -122,7 +141,7 @@ def rank1_stats_frame():
 
 def main():
     os.system("cls")
-    layout = [[splitFrame(), mergeFrame(), summarizeFrame(), plotsFrame()], [allFrame(), train_surrogate_frame(), wilcoxonFrame(), correlationFrame()], [flops_params_frame(),filter_csv_frame(),rank1_stats_frame()],
+    layout = [[csvToolsFrame(), plotsFrame()], [allFrame(), train_surrogate_frame(), wilcoxonFrame(), correlationFrame()], [flops_params_frame(),filter_csv_frame(),rank1_stats_frame()],
               [sg.Button('EXIT', key = 'BTN_EXIT')]]
     window = sg.Window('TECNAS', layout)
     while True:
@@ -138,22 +157,33 @@ def main():
             sg.popup('CSV files merged successfully!')
 
         elif event == 'BTN_SUMMARIZE':
-             if values['CHK_BEST_ARCHS']:
+            if values['CHK_BEST_ARCHS']:
                 summarize_indicators_folder(experiment_folder = values['summarize_input_folder'], archs_info = True)
                 sg.popup('Best architectures summaries created successfully!')
-             if values['CHK_GAS']:
+            if values['CHK_GAS']:
                 summarize_indicators_folder(experiment_folder = values['summarize_input_folder'], archs_info = False)
                 sg.popup('GA summaries created successfully!')
-             
+        elif event == 'BTN_ORGANIZE':
+            if values['CHK_CROSS']:
+                organize_csv(folder_path = values['organizer_input_folder'], cross_family=True, mut_family=False, only_window=False)
+                sg.popup('CSVs organized by crossover successfully!')
+            if values['CHK_MUT']:
+                organize_csv(folder_path = values['organizer_input_folder'], cross_family=False, mut_family=True, only_window=False)
+                sg.popup('CSVs organized by mutation successfully!')
+            if values['CHK_CROSS_MUT']:
+                organize_csv(folder_path = values['organizer_input_folder'], cross_family=True, mut_family=True, only_window=False)
+                sg.popup('CSVs organized by crossover and mutation successfully!')
+            if values['CHK_ONLY_WINDOW']:
+                organize_csv(folder_path = values['organizer_input_folder'], cross_family=False, mut_family=False, only_window=True)
+                sg.popup('CSVs organized by window successfully!')
+
         elif event == 'BTN_PLOT':
             plotter = Plotter(values['plots_input_folder'])
             if values['CHK_SUMMARIES_PLOTS']:
                 if values['CHK_BESTARCHS_SUMMARIZE_PLOTS']:
-                    columns = plotter.columns_arch
-                    plotter.plot_measures_from_folder(columns)
+                    plotter.plot_measures_from_folder(plot_bestarchs = True)
                 if values['CHK_GAS_SUMMARIZE_PLOTS']:
-                    columns = plotter.columns_GA
-                    plotter.plot_measures_from_folder(columns)
+                    plotter.plot_measures_from_folder(plot_bestarchs = False)
                 sg.popup('Summarized measures plots created successfully!')
             if values['CHK_CONV_SINGLEARCHS_PLOT']:
                 plotter.plot_acc_loss_arch()
@@ -161,14 +191,28 @@ def main():
             if values['CHK_CONVERGENCE_EXEC_PLOT']:
                 plotter.plot_convergence_exec()
                 sg.popup('Convergence per execution plots created successfully!')
+            if values['CHK_CONVERGENCE_GROUPED']:
+                plotter.plot_convergence_exec_grouped()
+                sg.popup('Convergence grouped plots created successfully!')
             if values['CHK_MEDIANS_PLOT']:
                 plotter.get_all_medians_folder()
                 sg.popup('Medians plots created successfully!')
             if values['CHK_BOXPLOTS']:
                 plotter.boxplot_from_folder()
                 sg.popup('Boxplots created successfully!')
-            if values['CHK_GENERATION_STATUS_PLOT']:
-                plotter.plot_generation_status()
+            if values['CHK_GENERATION_STATUS_PLOT']: 
+                if values['CHK_GSTATUS_INDIVIDUAL']:
+                    print('Individual convergence plots for generation status begin')
+                    plotter.plot_generation_status(individual_plots = True)
+                    print('Individual convergence plots for generation status done\n')
+                if values['CHK_GSTATUS_TOP_K']:
+                    print('Top K convergence plots for generation status begin')
+                    plotter.plot_generation_status(topK_plots = True, nsga2_window = values['CHK_WIN_METHOD'])
+                    print('Top K convergence plots for generation status done\n')
+                if values['CHK_GSTATUS_GROUPED']:
+                    print(f'Convergence grouped plots for generation status begins')
+                    plotter.plot_grouped_generation_status_all_subfolders(root_folder = values['plots_input_folder'], nsga2_window = values['CHK_WIN_METHOD'], slice_generations = values['CHK_SLICE_GENERATIONS']) if values['CHK_GENERATION_STATUS_SUBFOLDERS'] else plotter.plot_grouped_generation_status(nsga2_window = values['CHK_WIN_METHOD'], slice_generations = values['CHK_SLICE_GENERATIONS'])
+                    print(f'Convergence grouped plots for generation status done\n')
                 sg.popup('Generation status plots created successfully!')
 
         elif event == 'BTN_TRAIN_SURROGATES':
@@ -259,7 +303,7 @@ def main():
     window.close()
 
 
-default_experiment_path = r'C:\Users\xaero\OneDrive\ITESM DCC\Layer_article\results'
+default_experiment_path = r'C:\Users\xaero\OneDrive - Instituto Tecnologico y de Estudios Superiores de Monterrey\ITESM DCC\Layer_article'
 #default_experiment_path = os.getcwd()
 #default_input_path = ''
 default_input_path = default_experiment_path

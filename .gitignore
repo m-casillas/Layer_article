@@ -1,15 +1,24 @@
-# Python cache
+# Python
 __pycache__/
 *.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
 
 # Experiment outputs
 architectures/
 results/
 
-# Temporary files
-*.log
+# TensorBoard logs
+runs/
 
-# IDE settings
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code
 .vscode/
 
 # OS files

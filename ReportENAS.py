@@ -63,12 +63,12 @@ class ReportENAS:
                     #exec = 1
                     #Obtain a dafatrame per execution, only best archs
                     if archs_info: #Only add info from the best architecture at the end of the execution.
-                        df_bestexec = df[(df['Execution'] == exec) & (df['arch_status'] == 'BEST') & (df['Generation'] == df['Generation'].max())]
+                        df_bestexec = df[(df['Execution'] == exec) & (df['Generation'] == df['Generation'].max())]
                         row = [exec]
                         for column in columns[1:]: #Skip execution column
                             row.append(df_bestexec[column].values[0])
                     else: #GA info, it should be for each generation, best archs.
-                        df_bestexec = df[(df['Execution'] == exec) & (df['arch_status'] == 'BEST')]
+                        df_bestexec = df[(df['Execution'] == exec)]
                         for gen in generation_list:
                             df_bestgen = df_bestexec[df_bestexec['Generation'] == gen]
                             row = [exec, gen]
@@ -145,6 +145,7 @@ class ReportENAS:
              'HD_P2': arch.dP2,
              'HD_BM': arch.dBM,
              'HD_PB': arch.dPB,
+             'GD': tecnasObj.GD,
              'NFHT': arch.NFHT,
              'Succ_Crossover': tecnasObj.succ_cross,
              'Succ_Mutation': tecnasObj.succ_mut,

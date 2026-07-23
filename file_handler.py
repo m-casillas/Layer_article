@@ -1,6 +1,141 @@
 from globalsENAS import *
 import shutil
+from pathlib import Path
+import re
 
+def organize_csv2(folder_path,cross_family=False,mut_family=False,only_window=False):
+    """
+    Organize CSV files from the 'splitted' directory.
+
+    Expected filename patterns:
+        CROSS_MUT.csv
+        CROSS_MUT_*.csv
+        CROSS_MUT_W##_*.csv
+
+    Only the first token (CROSS) and second token (MUT)
+    are used for family grouping.
+
+    Window grouping is based on tokens matching W##
+    where ## is one or more digits.
+
+    Original files remain in 'splitted'.
+    """
+
+    splitted_dir=Path(folder_path)/"splitted"
+
+    if not splitted_dir.exists():
+        raise FileNotFoundError(f"'splitted' folder not found: {splitted_dir}")
+
+    window_pattern=re.compile(r"^W\d+$")
+
+    for csv_file in splitted_dir.glob("*.csv"):
+        parts=csv_file.stem.split("_")
+
+        if len(parts)<2:
+            continue
+
+        cross=parts[0]
+        mut=parts[1]
+
+        # Create cross-based family structure
+        if cross_family:
+            cross_dir=splitted_dir/"CROSS_FAMILY"/cross/"splitted"
+            cross_dir.mkdir(parents=True,exist_ok=True)
+
+            shutil.copy2(csv_file,cross_dir/csv_file.name)
+
+        # Create mutation-based family structure
+        if mut_family:
+            mut_dir=splitted_dir/"MUT_FAMILY"/mut/"splitted"
+            mut_dir.mkdir(parents=True,exist_ok=True)
+
+            shutil.copy2(csv_file,mut_dir/csv_file.name)
+
+        # Create window-based structure
+        if only_window:
+            window=None
+
+            for token in parts:
+                if window_pattern.match(token):
+                    window=token
+                    break
+
+            if window is not None:
+                window_dir=splitted_dir/window/"splitted"
+                window_dir.mkdir(parents=True,exist_ok=True)
+
+                shutil.copy2(csv_file,window_dir/csv_file.name)
+
+def organize_csv(folder_path, cross_family=False, mut_family=False, only_window=False):
+    """
+    Organize CSV files from the 'splitted' directory.
+
+    Expected filename patterns:
+        CROSS_MUT.csv
+        CROSS_MUT_*.csv
+        CROSS_MUT_W##_*.csv
+
+    Only the first token (CROSS) and second token (MUT)
+    are used for family grouping.
+
+    Window grouping is based on tokens matching W##
+    where ## is one or more digits.
+
+    Original files remain in 'splitted'.
+    """
+
+    splitted_dir = Path(folder_path) / "splitted"
+
+    if not splitted_dir.exists():
+        raise FileNotFoundError(f"'splitted' folder not found: {splitted_dir}")
+
+    window_pattern = re.compile(r"^W\d+$")
+
+    for csv_file in splitted_dir.glob("*.csv"):
+        parts = csv_file.stem.split("_")
+
+        if len(parts) < 2:
+            continue
+
+        cross = parts[0]
+        mut = parts[1]
+
+        # Combined cross + mutation family structure
+        if cross_family and mut_family:
+            family_name = f"{cross}_{mut}"
+            family_dir = splitted_dir / family_name / "splitted"
+            family_dir.mkdir(parents=True, exist_ok=True)
+
+            shutil.copy2(csv_file, family_dir / csv_file.name)
+
+        # Cross-only family structure
+        elif cross_family:
+            cross_dir = splitted_dir / "CROSS_FAMILY" / cross / "splitted"
+            cross_dir.mkdir(parents=True, exist_ok=True)
+
+            shutil.copy2(csv_file, cross_dir / csv_file.name)
+
+        # Mutation-only family structure
+        elif mut_family:
+            mut_dir = splitted_dir / "MUT_FAMILY" / mut / "splitted"
+            mut_dir.mkdir(parents=True, exist_ok=True)
+
+            shutil.copy2(csv_file, mut_dir / csv_file.name)
+
+        # Window-based structure
+        if only_window:
+            window = None
+
+            for token in parts:
+                if window_pattern.match(token):
+                    window = token
+                    break
+
+            if window is not None:
+                window_dir = splitted_dir / window / "splitted"
+                window_dir.mkdir(parents=True, exist_ok=True)
+
+                shutil.copy2(csv_file, window_dir / csv_file.name)
 
 def split_all_csvs_in_folder(input_folder, path_results):
     print('\nSplitting CSVs per crossover and mutation type...')

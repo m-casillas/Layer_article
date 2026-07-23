@@ -14,6 +14,7 @@ from tensorflow.keras.layers import Input
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 '''
+from TECNAS_AOS import TECNAS_AOS
 from TECNAS_NSGAII import TECNAS_NSGAII
 from Status import Status
 from globalsENAS import *
@@ -47,8 +48,20 @@ class TECNAS:
     elif ConfigClass.REPRESENTATION_TYPE == 'B':
         REP_CONSTANTS = BLOCKS_CONSTANTS
 
+    def calculate_SCN(self, arch_integer_encoding):
+        #Calculate Similariy of Closest Neighbbor of current individual with all generatios.
+        min_dist = float('inf')
+        for integer_encoding in self.integer_encoding_history:
+            dist = hamming_distance(arch_integer_encoding, integer_encoding)
+            if dist < min_dist:
+                min_dist = dist
+                if dist == 1: #No need to continue checking.
+                    break
+        return min_dist
+
+
     def calculate_GD(self, archs_list):
-        #Calculate the Generational Distance (GD) of a list of architectures.
+        #Calculate the Genotype Distance (GD) of a list of architectures.
         #GD is the mean Hamming distance of all architectures in archs_list.
         from itertools import combinations
         add = 0
@@ -58,7 +71,9 @@ class TECNAS:
             add += hamming_distance(a.integer_encoding, b.integer_encoding)
             N += 1
         print1(Fore.MAGENTA + f"GD calculation complete. Total pairs: {N}")
-        return add / N
+        GD = add/N
+        GD = GD/BLOCKS_CONSTANTS.SIZE_BLOCKGEN if ConfigClass.REPRESENTATION_TYPE == 'B' else GD/LAYERS_CONSTANTS.SIZE_LAYERGEN
+        return GD
 
     def is_strictly_better(self, arch1, arch2):
         better_or_equal = ( arch1.acc >= arch2.acc and  arch1.flops <= arch2.flops and arch1.num_params <= arch2.num_params)
@@ -75,8 +90,12 @@ class TECNAS:
             self.search_name += f'MARKOV_{self.markov_type}'
         elif config_tecnas.HHSE_RANDOM:
             self.search_name += f'HRANDOM'
+        elif config_tecnas.HHSE_TEC:
+            self.search_name += f'HHSE_AOS'
         elif config_tecnas.NSGA2_NORMAL:
-            self.search_name += f'{self.crossover_type}_{self.mutation_type}'
+            nsga2_window_str = '_W' if config_tecnas.NSGA2_WINDOW else ''
+            nsga2_window_size_str = f"{config_tecnas.NSGA2_WINDOW_SIZE_PERC*100:.0f}_" if config_tecnas.NSGA2_WINDOW else ''
+            self.search_name += f'{self.crossover_type}_{self.mutation_type}{nsga2_window_str}{nsga2_window_size_str}'
 
     def validate_architecture(self, gen_list):
         # Validates and fixes the mutable CONV/POOL zone (indices 2-5).
@@ -405,68 +424,7 @@ class TECNAS:
 
         return states, aggregated_counts, P
 
-    def markov_aggregate_matrix2(self):
-        import os
-        import csv
-        matrix_folder = os.path.join(self.pop[0].path_folder, "matrix")
-        # Find all count matrix files
-        files = [f for f in os.listdir(matrix_folder)  if "count_matrix" in f and f.endswith(".csv")]
-        if not files:
-            raise ValueError("No count_matrix CSV files found in the folder.")
-        aggregated_counts = None
-        states = None
-        # --- Aggregate all matrices ---
-        for file in files:
-            file_path = os.path.join(matrix_folder, file)
-            with open(file_path, mode="r", newline="", encoding="utf-8") as f:
-                reader = csv.reader(f)
-                header = next(reader)
-                current_states = header[1:]
-                if aggregated_counts is None:
-                    states = current_states
-                    n = len(states)
-                    aggregated_counts = [[0] * n for _ in range(n)]
-                if current_states != states:
-                    raise ValueError(f"State mismatch in file {file}")
-                for i, row in enumerate(reader):
-                    counts_row = list(map(int, row[1:]))
-                    for j in range(len(counts_row)):
-                        aggregated_counts[i][j] += counts_row[j]
-
-        # --- REMOVE zero rows (and matching columns) ---
-        row_sums = [sum(row) for row in aggregated_counts]
-        valid_indices = [i for i, s in enumerate(row_sums) if s > 0]
-        # If all rows are zero → return empty matrix
-        if not valid_indices:
-            return [], []
-        # Filter states
-        states = [states[i] for i in valid_indices]
-        # Filter rows and columns
-        filtered_counts = []
-        for i in valid_indices:
-            filtered_row = [aggregated_counts[i][j] for j in valid_indices]
-            filtered_counts.append(filtered_row)
-        aggregated_counts = filtered_counts
-        n = len(states)
-        # --- Normalize to probability matrix ---
-        P = []
-        for row in aggregated_counts:
-            total = sum(row)
-            if total == 0:
-                P.append([0] * n)
-            else:
-                P.append([value / total for value in row])
-        # --- Save result ---
-        output_file = os.path.join(matrix_folder, f"matrix_{config_tecnas.REPRESENTATION_TYPE}{config_tecnas.ENCODING_TYPE}_{config_tecnas.HHSE_GREEDY_CRITERIA}_Seed{config_tecnas.INITIAL_SEED}")
-        #output_file += '_'.join(str(interv) for interv in config_tecnas.perc_intervals)  THIS IS FOR MARKOV COMBINED
-        output_file += '.csv'
-        with open(output_file, mode="w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow([f"{config_tecnas.HHSE_GREEDY_CRITERIA}"] + states)
-            for i, row in enumerate(P):
-                writer.writerow([states[i]] + [f"{p:.6f}" for p in row])
-        return states, P
-
+    
     def markov_barplot_mean_stationary_probabilities(self):
         if config_tecnas.HHSE_GREEDY == False:
             return
@@ -666,12 +624,12 @@ class TECNAS:
         return pop
 
     def apply_all_GOs(self): #==================================================APPLY ALL GOs=======================================================
-        
+     
         def determine_GOs(self, GO_SELECTED = False, GO_SELECTED_NAME = ''):
-            #Use identified GOs for each stage (CROSS, MUT, HD, DHV) for GREEDY_COMBINED. set_GREEDY_GOs_list returns 4 lists with all GOs (SPC_MPAR, TPC_MTYP, etc)
+            #Use best SELECTED identified GOs for each stage (CROSS, MUT, HD, DHV) for GREEDY_COMBINED. set_GREEDY_GOs_list returns 4 lists with all GOs (SPC_MPAR, TPC_MTYP, etc)
             #GO_SELECTED: CROSS_SELECTED, MUT_SELECTED, etc.
-            GOs_CROSS, GOs_MUT, GOs_HV, GOs_dHV = config_tecnas.set_GREEDY_GOs_list(config_tecnas.REPRESENTATION_TYPE, config_tecnas.ENCODING_TYPE)
-            GOs_dict = {'CROSS': GOs_CROSS, 'MUT': GOs_MUT, 'HV': GOs_HV, 'DHV': GOs_dHV}
+            GOs_CROSS, GOs_MUT, GOs_HV, GOs_GD = config_tecnas.set_GREEDY_GOs_list(config_tecnas.REPRESENTATION_TYPE, config_tecnas.ENCODING_TYPE)
+            GOs_dict = {'CROSS': GOs_CROSS, 'MUT': GOs_MUT, 'HV': GOs_HV, 'GD': GOs_GD}
             if GO_SELECTED:
                 return GOs_dict[GO_SELECTED_NAME]
                        
@@ -683,7 +641,7 @@ class TECNAS:
             elif progress <= self.limits[2]:
                 return GOs_HV
             elif progress <= self.limits[3]:
-                return GOs_dHV
+                return GOs_GD
             else:
                 print(Fore.LIGHTRED_EX + "No GOs selected for this stage. This should not happen if limits are set correctly.")
                 return None, None
@@ -695,8 +653,8 @@ class TECNAS:
                 while cross_mut_str == 'NONE_NONE' and config_tecnas.IGNORE_RANDOM:
                     cross_mut_str = f'{random.choice(config_tecnas.crossoverList_hhse)}_{random.choice(config_tecnas.mutationList_hhse)}'
                 return cross_mut_str
-            GOs_CROSS, GOs_MUT, GOs_HV, GOs_dHV, GOs_GD = config_tecnas.set_GREEDY_FIXED_GOs_list(config_tecnas.REPRESENTATION_TYPE, config_tecnas.ENCODING_TYPE)
-            GOs_dict = {'CROSS': GOs_CROSS, 'MUT': GOs_MUT, 'HV': GOs_HV, 'DHV': GOs_dHV, 'GD': GOs_GD}
+            GOs_CROSS, GOs_MUT, GOs_HV, GOs_GD = config_tecnas.set_GREEDY_FIXED_GOs_list(config_tecnas.REPRESENTATION_TYPE, config_tecnas.ENCODING_TYPE)
+            GOs_dict = {'CROSS': GOs_CROSS, 'MUT': GOs_MUT, 'HV': GOs_HV, 'GD': GOs_GD}
             return GOs_dict[config_tecnas.HHSE_GREEDY_CRITERIA][0]
         #Apply all genetic operators. Save them as a list of objects.
         self.report_training = False #Disable training report for this function
@@ -760,7 +718,8 @@ class TECNAS:
                 best_go = max(self.GOs_names, key = lambda go: self.generation_status[go].HV)
             elif progress <= self.limits[3]:
                 self.markov_type = config_tecnas.HHSE_MARKOV_TYPES[3]
-                best_go = max(self.GOs_names, key = lambda go: self.generation_status[go].dHV)
+                #best_go = max(self.GOs_names, key = lambda go: self.generation_status[go].dHV)
+                best_go = max(self.GOs_names, key = lambda go: self.generation_status[go].GD)
             else:
                 print(Fore.LIGHTRED_EX + "No criteria selected for this stage. This should not happen if limits are set correctly. {progress = }")
                 best_go = None
@@ -1276,12 +1235,26 @@ class TECNAS:
         return arch
     
     def train_model(self, arch = None, calculate_cm = False, epochs = ConfigClass.EPOCHS, print_status = True):
+        def set_search_str():
+            hhse_str = ""
+            if config_tecnas.HHSE_RANDOM:
+                hhse_str = "RANDOM"
+            elif config_tecnas.HHSE_MARKOV:
+                markov_mode = "COMBINED" if self.COMBINED_MARKOV else self.markov_type
+                hhse_str = f"MARKOV {markov_mode}"
+            elif config_tecnas.HHSE_GREEDY:
+                hhse_str = f"GREEDY: {config_tecnas.HHSE_GREEDY_CRITERIA}"
+            elif config_tecnas.HHSE_TEC:
+                hhse_str = f"AOS: MAB UCB"
+            else:
+                hhse_str = ""
+            return hhse_str
         ast_bar = self.ast_bar
 
         if self.generation > 0:
             if print_status == True:
                 #print(Fore.LIGHTBLUE_EX + f'\n{ast_bar} EXECUTION {self.exec}/{ConfigClass.EXECUTIONS} GENERATION {self.generation}/{ConfigClass.GENERATIONS} {self.crossover_type} {self.mutation_type} {self.arch_count+1}/{ConfigClass.TOTAL_ARCH} architectures {ast_bar}')
-                hhse_str = 'RANDOM' if config_tecnas.HHSE_RANDOM == True else f'MARKOV {"COMBINED" if self.COMBINED_MARKOV else self.markov_type}' if config_tecnas.HHSE_MARKOV == True else f'GREEDY: {config_tecnas.HHSE_GREEDY_CRITERIA}' if config_tecnas.HHSE_GREEDY == True else ''
+                hhse_str = set_search_str()
                 print1(Fore.LIGHTBLUE_EX + f'\n{ast_bar} EXECUTION {self.exec}/{ConfigClass.EXECUTIONS} GENERATION {self.generation}/{ConfigClass.GENERATIONS} {self.crossover_type}_{self.mutation_type}  | NSGA2 {config_tecnas.NSGA2} | HHSE {self.HHSE} {hhse_str} {ast_bar}' + Fore.RESET)
             print1(Fore.YELLOW + f'{ConfigClass.DATASET} {ConfigClass.DATASET_PART*100}% |Repr Encoding: {self.representation_type}-{self.encoding_type}| |Surrogate: {self.SURROGATE}| |Train: {self.TRAIN}| |Simulate: {self.SIMULATE}| Surrogate folder: {self.experiment_folder}' + Fore.RESET)
             print1(Fore.YELLOW + f'Mutation prob: {self.MUT_PROB*100:.2f}%' + Fore.RESET)
@@ -1374,6 +1347,9 @@ class TECNAS:
         elif config_tecnas.HHSE_MARKOV == True:
             self.current_state = self.HHSE_MARKOV()
             self.crossover_type, self.mutation_type = self.current_state.split('_')
+        elif config_tecnas.HHSE_TEC == True:
+            self.crossover_type, self.mutation_type = self.HHSE_TEC()
+
         else:
             print(Fore.RED + 'No HHSE method selected. Aborting' + Fore.RESET)
             return None
@@ -1442,10 +1418,63 @@ class TECNAS:
         best_go, self.pop = self.apply_all_GOs()
         print('Application of all genetic operators complete.')
         return best_go.split('_')
+    
+    def HHSE_TEC(self):
+        self.AOS_rwd_percentages = [0, 0, 0] #For calculating the reward in TECNAS AOS. [HV, CROSS, MUT]
+        if self.generation == 1:
+            cross, mut = 'NONE', 'NONE' #Next step is to apply rest of GOs to calculate UCB info.
+            return cross, mut
+        if config_tecnas.HHSE_TEC_IMPROVED:
+            self.CROSS_GOs, self.MUT_GOs, self.HV_GOs = config_tecnas.set_HHSE_TEC_GOs(config_tecnas.REPRESENTATION_TYPE, config_tecnas.ENCODING_TYPE)
+            progress = self.generation / self.total_gen
+            if progress <= 0.40:
+                cross, mut = self.TECNAS_AOS_obj.select_operator(candidates=self.MUT_GOs).split('_')
+                self.AOS_rwd_percentages = [0.30, 0.10, 0.60] 
+            elif progress <= 0.75:
+                cross, mut = self.TECNAS_AOS_obj.select_operator(candidates=self.HV_GOs).split('_')
+                self.AOS_rwd_percentages = [0.80, 0.10, 0.10]
+            elif progress <= 1.0:
+                cross, mut = self.TECNAS_AOS_obj.select_operator(candidates=self.CROSS_GOs).split('_')
+                self.AOS_rwd_percentages = [0.30, 0.60, 0.10]
+        else:
+            cross, mut = self.TECNAS_AOS_obj.select_operator().split('_')
+        return cross, mut
 
+        def considerlater(self):
+            #Choose the GO, according to the probability.
+            #CROSS_DICT = {'SPC_MPOLY': 0.45, 'SPC_MNUF': 0.35, 'SPC_NONE': 0.2}
+            self.CROSS_DICT, self.MUT_DICT, self.HV_DICT, self.GD_DICT = config_tecnas.set_HHSE_TEC_GOs(config_tecnas.REPRESENTATION_TYPE, config_tecnas.ENCODING_TYPE)
+            progress = self.generation / self.total_gen
+            
+            if progress <= self.limits[0]:
+                next_go = random.choices(list(self.MUT_DICT.keys()), weights=self.MUT_DICT.values(),  k=1)[0]
+            elif progress <= self.limits[1]:
+                next_go = random.choices(list(self.CROSS_DICT.keys()), weights=self.CROSS_DICT.values(),  k=1)[0]
+            elif progress <= self.limits[2]:
+                next_go = random.choices(list(self.HV_DICT.keys()), weights=self.HV_DICT.values(),  k=1)[0]
+            elif progress <= self.limits[3]:
+                next_go = random.choices(list(self.GD_DICT.keys()), weights=self.GD_DICT.values(),  k=1)[0]
+            else:
+                next_go = 'ERROR'
+                print(Fore.RED + 'Error in HHSE_TEC: progress exceeds limits' + Fore.RESET)
+            return next_go.split('_')
+
+    def NSGA2_window(self):
+        progress = self.generation / self.total_gen
+        if self.generation == 1:
+            self.original_cross_type = self.crossover_type
+            self.original_mut_type = self.mutation_type
+        
+        if progress <= config_tecnas.NSGA2_WINDOW_SIZE_PERC:           
+            self.crossover_type, self.mutation_type = random.choice(config_tecnas.crossoverList_hhse), random.choice(config_tecnas.mutationList_hhse)
+        else:
+            self.crossover_type, self.mutation_type = self.original_cross_type, self.original_mut_type
+        
     def mainLoop(self):
         if self.HHSE == True:
             if config_tecnas.HHSE_RANDOM or config_tecnas.HHSE_GREEDY:
+                self.ENAS()
+            elif config_tecnas.HHSE_TEC:
                 self.ENAS()
             else: #MARKOV
                 for markov_type in config_tecnas.HHSE_MARKOV_TYPES:
@@ -1466,10 +1495,10 @@ class TECNAS:
         rank_archs(self.children[0].path_filereport)
         print2('Ranking finished\n')
         print2('Filtering results by best architectures')
-        filter_csv(self.children[0].path_folder, generation = 'LAST', arch_status = 'BEST', rank = 'ALL', nparts = 1) 
+        #filter_csv(self.children[0].path_folder, generation = 'LAST', arch_status = 'BEST', rank = 'ALL', nparts = 1) 
         print2('Filtering complete')
         print2('Filtering by rank 1 architectures')
-        filter_csv(self.children[0].path_folder, generation = 'LAST', arch_status = 'BEST', rank = 'HIGHEST', nparts = 1)
+        #filter_csv(self.children[0].path_folder, generation = 'LAST', arch_status = 'BEST', rank = 'HIGHEST', nparts = 1)
         print2('Filtering by rank 1 complete')
 
     def ENAS(self):
@@ -1479,13 +1508,13 @@ class TECNAS:
         else:
             self.search_strategy = 'GA'
         seed_idx = 0
-        self.local_seed = config_tecnas.SEED_LIST[seed_idx]
-        random.seed(self.local_seed)
-        np.random.seed(self.local_seed)
-        #tf.random.set_seed(self.local_seed)
         self.prev_best_integerEnc = []
         
         for e in range(1,ConfigClass.EXECUTIONS+1):
+            self.local_seed = config_tecnas.SEED_LIST[seed_idx]
+            random.seed(self.local_seed)
+            np.random.seed(self.local_seed)
+            #tf.random.set_seed(self.local_seed)
             self.MUT_PROB = ConfigClass.MUT_PROB
             self.exec = e
             self.trained_archs = {}
@@ -1495,9 +1524,11 @@ class TECNAS:
             self.op_count = {}
             self.GOs_history = []
             self.GOs_HV = {k: [0, 0, 0] for k in self.GOs_HV} #HV, PREV_HV and dHV.
+            self.TECNAS_AOS_obj = TECNAS_AOS(tecnasObj = self)
             for g in range(1,ConfigClass.GENERATIONS+1):
                 self.pool = []
                 self.generation = g
+                self.NSGA2_window() if config_tecnas.NSGA2_WINDOW  else None
                 if self.HHSE == True: #Choose crossover and mutation type automatically
                     print2(Fore.MAGENTA + 'Hyper-heuristic selection of genetic operators' + Fore.RESET)
                     self.select_HHSE_method()
@@ -1507,8 +1538,15 @@ class TECNAS:
                     self.pool = self.pop + self.children
                     self.sorted_pool = sorted(self.pool, key=lambda obj: obj.acc, reverse = True) #Best archs first
                     self.pop = self.selection(pop = copy.deepcopy(self.pop)) #Here, WORST AND MEDIAN ARCHS ARE IDENTIFIED
+                    self.GD = self.calculate_GD(self.pop)
                     self.reporter.save_generation_status(Status(tecnasObj = self, crosstype = self.crossover_type, muttype = self.mutation_type, pop = self.pop, JUST_PARETO = True)) #Save the info from the pareto front.
                     self.set_arch_statuses()
+                if config_tecnas.HHSE_TEC:
+                    if self.generation > 1:
+                        self.TECNAS_AOS_obj.total_selections += 1 if config_tecnas.HHSE_TEC else 0
+                        self.TECNAS_AOS_obj.update_arm(GO_str = f'{self.crossover_type}_{self.mutation_type}', reward = self.TECNAS_AOS_obj.calculate_reward(*self.AOS_rwd_percentages)) if config_tecnas.HHSE_TEC else None
+                       
+                    
             self.report_op_counts(results_folder = self.children[0].path_folder) if config_tecnas.HHSE_GREEDY_FIXED else None
             self.generate_total_counts(os.path.join(self.children[0].path_folder, f"counts_{config_tecnas.HHSE_GREEDY_CRITERIA}")) if config_tecnas.HHSE_GREEDY_FIXED else None
             self.reporter.flush(self.pop[0].path_filereport)
@@ -1516,6 +1554,7 @@ class TECNAS:
             self.local_seed = config_tecnas.SEED_LIST[seed_idx]
             self.save_histories()
             self.markov_matrix(transitions = self.GOs_history, iterations=1000, tolerance=1e-10) if config_tecnas.HHSE_GREEDY == True else None
+            self.TECNAS_AOS_obj.report_arms_csv(results_folder = self.children[0].path_folder) if config_tecnas.HHSE_TEC else None
 
         if config_tecnas.HHSE_GREEDY == True and not config_tecnas.HHSE_GREEDY_FIXED:
             self.markov_mean_stationary_probabilities()
@@ -1539,6 +1578,7 @@ class TECNAS:
         self.mutation_types_list = ConfigClass.mutation_types_list if HHSE == False else config_tecnas.mutationList_hhse
         self.crossover_type = None
         self.mutation_type = None
+        self.original_cross_type, self.original_mut_type = None, None #For NSGA2 window
         self.search_strategy = None
         self.reporter = ReportENAS()
         self.generation = 0
@@ -1577,6 +1617,8 @@ class TECNAS:
         self.MAXPARAMS = self.BLOCKS_MAXPARAMS if config_tecnas.REPRESENTATION_TYPE == 'B' else self.LAYERS_MAXPARAMS
 
         #For HHSE ========================================= HHSE ========================================================================
+        self.TECNAS_AOS_obj = None #For MAB and UCB.
+        self.AOS_rwd_percentages = [0,0,0] #For calculating the reward in TECNAS AOS. [accuracy, GD, HV]
         #For GREEDY, only chose the identified GOs for each stage.
         self.GOs_names = [f"{cross}_{mut}" for cross, mut in product(self.crossover_types_list, self.mutation_types_list)] 
     
@@ -1584,6 +1626,7 @@ class TECNAS:
             self.GOs_names.remove('NONE_NONE')
         #Save here all population generated through all combinations of crossover and mutation
         #For example, = {'SPC_MPAR': [arch1, arch2, ...], 'SPC_MSWAP': [arch1, arch2, ...], ...}
+        self.GOs_names = sum(config_tecnas.set_HHSE_TEC_GOs(config_tecnas.REPRESENTATION_TYPE, config_tecnas.ENCODING_TYPE), []) if config_tecnas.HHSE_TEC else self.GOs_names
         self.GOs_population_dict = {}
         self.selected_by = ' ' #Depicts why the GO was selected as the best one in HHSE GREEDY
         self.GOs_history = [] #['SPC_MPAR', 'TPC_MSWAP', 'UC_MPAR', 'TPC_MSWAP',...} GOs order of application

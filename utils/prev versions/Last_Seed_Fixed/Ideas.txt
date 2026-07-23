@@ -1,0 +1,7 @@
+Demostrar que el uso combinado de GOs es mejor que aplicarlos solos durante toda la búsqueda (gráficas de convergencia y tablas, respecto a los individuos del frente de pareto por generación).
+GREEDY_COMPLETO (GC): Sirve para demostrar eso.
+GRREDY_SELECTED (GS): Utiliza menos GOs que GC y tiene desempeño similar.
+GREEDY_FIXED (GF): Demuestra que hay consistencia en el uso de operadores para maximizar CROSS, MUT, HV
+y GD.
+
+Paso Crítico: implementar una estrategia HHSE para elegir los operadores identificados en GF.

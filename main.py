@@ -1,16 +1,15 @@
 #gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':[-1,2]}, {'CONV':[64,3]}, {'POOLMAX':[-1,2]}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
 
-
-#AOS: Credit assignment wit probability.
-#GREEDY FIXED: use random Gos
-#GREEDY FIXED: delete Markov routines.
-#GREEDY CRITEGRIA ABOUT DISTANCES (maybe between parents and children, maybe between all architectures).
-# #URGENT: Only the last stage is saved. Remember to save different markov matrices for each stage.
-#TODO: Ablation studies: analyze CROSS_NONE, MUT_NON, etc. Only keep best operators for COMBINATION *dont use all of them.
+#Working on SCN
+#IDEA: NSGA2 for HV, cross and mut.
+#URGENT NOW: RWD with acc, flops and params not working. WTF is RWD???
+#F URGENT! Plot only certain GOs. For example, for accuracy, SBX shouldnt be plotted.
+#URGENT SOMEDAY: SBX crossover it's being called with max_int as 63 (because of blocks) This has to be changed for Layers. Also for mutation. 
+#Determine stage order as parameter (CROSS, MUT, HV, GD)  or another one. I changed HHSE_TEC
+#HHSE_TEC: Add name to search type in CSVs. Also to folders. HHSE_TEC COMBINED and with fixed criteria, like CROSS. Ablation studies.
 #NOW: Generation Status plotter should be given the generation intervals.
-#TODO: Print the k top search strategies by AUC.
 #UREGNT: GReedy COMBINED should return 4 markov matrices. First 20% generations give the CROSS Matrix, etc. Analyze those matrices.
-#GREEDY: How to break ties?
+#GREEDY: How to break ties? CHECK HOW IT WAS DONE FOR TEC_AOS.
 #NOW: A LOT OF DUPLICATED BEST ARCHS. CALCULATE CM FOR ONE AND COPY TO THE OTHERS.
 #Defnie a method for loading the initial population from a file.
 #STATS and PLOTS for RANK 1 ARCHS 
@@ -56,6 +55,7 @@ os.system("clear")
 #C:\Users\xaero\OneDrive\ITESM DCC\Layer_article\results\surrogate_only
 #experiment_folder = r"experiment01_cifar10complete"
 
+print("REGRESSOR_TYPE =", ConfigClass.REGRESSOR_TYPE)
 
 tecNAS = TECNAS(HHSE = config_tecnas.HHSE, NSGA2 = config_tecnas.NSGA2, representation_type = ConfigClass.REPRESENTATION_TYPE, regressor_type = ConfigClass.REGRESSOR_TYPE, experiment_folder = ConfigClass.experiment_folder)
 start_time = time.time()

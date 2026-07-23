@@ -13,7 +13,18 @@ class Architecture(ABC):
     def set_report_path(self, tecnasObj = None):
         folder_name = f'{tecnasObj.representation_type}{tecnasObj.encoding_type}{architecture_filename_noCSV}'
         ensure_folder_exists(os.path.join(tecnasObj.path_results, folder_name))
-        architecture_csv_filename_extended = f'{folder_name}_E{ConfigClass.EXECUTIONS}_G{ConfigClass.GENERATIONS}_N{ConfigClass.MAIN_NPOP}_{ConfigClass.SORT_ARCHS}_{"HHSE" if tecnasObj.HHSE else ""}_{"NSGA2" if config_tecnas.NSGA2 else ""}_{config_tecnas.HHSE_GREEDY_CRITERIA if config_tecnas.HHSE_GREEDY else ""}.csv'                       
+        NSGA2_str = 'NSGAII_' if config_tecnas.NSGA2 else ''
+        NSGA2_WINDOW_str = 'WINDOW' if config_tecnas.NSGA2_WINDOW else ''
+        NSGA2_WINDOW_SIZE_PERC_str = f"{config_tecnas.NSGA2_WINDOW_SIZE_PERC*100:.0f}_" if config_tecnas.NSGA2_WINDOW else ''
+        HHSE_str = 'HHSE_' if config_tecnas.HHSE else ''
+        GREEDY_str = 'GREEDY_' if config_tecnas.HHSE_GREEDY else ''
+        GREEDY_CRITERIA_str = config_tecnas.HHSE_GREEDY_CRITERIA if config_tecnas.HHSE_GREEDY else ''
+        GREEDY_FIXED_str = 'GREEDY_FIXED_' if config_tecnas.HHSE_GREEDY_FIXED else ''
+        search_type = NSGA2_str + NSGA2_WINDOW_str + NSGA2_WINDOW_SIZE_PERC_str + HHSE_str + GREEDY_str + GREEDY_CRITERIA_str + GREEDY_FIXED_str
+        #Agrega ConfigClass.SORT_ARCHS para INFERIOR, MIDDLE, SUPERIOR
+        
+        
+        architecture_csv_filename_extended = f'{folder_name}_E{ConfigClass.EXECUTIONS}_G{ConfigClass.GENERATIONS}_N{ConfigClass.MAIN_NPOP}_{search_type}.csv'                       
         self.path_folder = os.path.join(tecnasObj.path_results, f'{folder_name}')
         self.path_filereport = os.path.join(tecnasObj.path_results, f'{folder_name}', f'{architecture_csv_filename_extended}')
 
@@ -61,6 +72,7 @@ class Architecture(ABC):
             self.genoStr = str(self.genotype.gen_list)
         self.integer_encoding = None #Integer encoding of the architecture
         self.binary_encoding = [] #Binary encoding of the architecture
+        self.real_encoding = [] #Real encoding of the architecture (for surrogate model)
         self.P1Idx = ''
         self.P2Idx = ''
         self.P1IntegerEncoding = None

@@ -1,3 +1,17 @@
+I’m using Evolutionary NAS with NSGA2 for CIFAR100, using fixed length real valued vectors to represent RESNET architectures. I’m maximizing accuracy and minimizing FLOPs and number of parameters. For the accuracy evaluation, I’m using a regressor with the following characteristics:
+Model                      RMSE         R²        MAE    Pearson   Spearman    Kendall
+Gradient Boosting        0.0142     0.8740     0.0108     0.9350     0.8543     0.6844
+
+I’m trying to find special characteristics about genetic operators (GOs). Currently I’m using Single-Point Crossover (SPC), Two-Point Crossover (TPC), Uniform Crossover (UC) and SBX. For mutation, non uniform mutation (MNUNF) and polynomial mutation (MPOLY). NONE is used to denote there is no crossover or mutation. There are in total 15 GOs.
+I want to find out what GOs are better respect to some Performance Indicators (PIs), namely: successful crossovers (CROSS), successful mutations (MUT), HV and population distance (this is calculated using the hamming distance between each architecture, and getting the average). 
+Is this clear to you? Do nothing yet with this information.
+Now, I conducted some experiments. An experiment consists of running the genetic algorithm through 100 generations.
+1)	Use each GO through 30 experiments and record per generation: mean accuracy, FLOPs and number of parameters from individuals in the pareto front. Highest accuracy. HV and PD (population distance). Percentage of successful crossovers and mutations.
+2)	Fix each GO through 30 experiments, separately. For each generation, apply all 15 GOs and record what GOs would get the best PI, but don’t use them. For example, let’s say I use SPC_MNUNF for all 100 generations. Apply all GOs to the current population and record all PIs, and count how many times they got the best ones (For example, UC_MPOLY got the highest score according to CROSS, but in the next generation, it was SBX_MNUNF). 
+Is this clear for you? Please explain in detail what I just told you. Don’t do anything more yet.
+
+
+
 Demostrar que el uso combinado de GOs es mejor que aplicarlos solos durante toda la búsqueda (gráficas de convergencia y tablas, respecto a los individuos del frente de pareto por generación).
 GREEDY_COMPLETO (GC): Sirve para demostrar eso.
 GRREDY_SELECTED (GS): Utiliza menos GOs que GC y tiene desempeño similar.

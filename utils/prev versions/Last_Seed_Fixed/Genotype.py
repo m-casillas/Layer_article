@@ -1,0 +1,13 @@
+from globalsENAS import *
+"""# Genotype Class"""
+
+class Genotype:
+    def __str__(self):
+        return 'GENOTYPE' + str(self.gen_list)
+
+    def __init__(self, rep_type = ConfigClass.REPRESENTATION_TYPE, encoding_type = ConfigClass.ENCODING_TYPE, gen_list = None):
+        self.rep_type = rep_type # L, B, C, T: layer, block, cell, topological
+        self.encoding_type = encoding_type #INT, BIN: integer vector, binary vector
+        #gen_list is a list of dictionaries. Each dictionary represents the layer type and its parameters
+        #INP: input, CONV, POOLMAX, FLATTEN, DENSE
+        self.gen_list = gen_list

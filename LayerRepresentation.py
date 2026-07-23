@@ -112,6 +112,8 @@ class LayerRepresentation(Architecture):
                 self.integer_encoding_to_binary_encoding(Globals.INDEXES_DENSES[-1])
             elif encoding == 'REAL':
                 self.integer_encoding_to_real_encoding()
+            elif encoding == 'INT':
+                pass
             else:
                 print(f'ERROR: Encoding type {encoding} not recognized')
                 self.integer_encoding = []

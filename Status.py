@@ -7,7 +7,7 @@ import config_tecnas
 
 class Status:
     def __init__(self, tecnasObj = None, crosstype = '', muttype = '', pop = None, JUST_PARETO = False):
-        self.pop = sorted(pop, key=lambda obj: obj.acc, reverse = True) #Best archs first
+        self.pop = sorted(pop, key=lambda obj: obj.acc, reverse = True) #Best archs first by accuracy
         self.tecnasObj = tecnasObj
         self.pop_size = len(tecnasObj.pop)
         self.crosstype = crosstype
@@ -29,6 +29,9 @@ class Status:
         self.mean_dP2 = sum(arch.dP2 for arch in self.pop)/self.pop_size
         self.mean_dBM = sum(arch.dBM for arch in self.pop)/self.pop_size
         self.dPB = self.pop[0].dPB
+        self.best_acc = self.pop[0].acc
+        self.FLOPs_bestarch = self.pop[0].flops
+        self.Params_bestarch = self.pop[0].num_params
         self.best_accuracy = max(arch.acc for arch in self.pop)
         self.succ_cross = self.tecnasObj.succ_cross
         self.succ_mut = self.tecnasObj.succ_mut
@@ -48,11 +51,15 @@ class Status:
         self.succ_mut = self.tecnasObj.succ_mut/self.tecnasObj.total_mut if self.tecnasObj.total_mut > 0 else 0
         self.generation = self.tecnasObj.generation
         self.selected_by = config_tecnas.HHSE_GREEDY_CRITERIA #self.tecnasObj.selected_by
-
+        
         self.dict_archinfo = {'Execution': [self.exec],
+                'Repr_Enc':[config_tecnas.REPR_ENC_STR],                    
                 'Generation': [self.generation],
                 'Crossover_type': [self.crosstype],
                 'Mutation_type': [self.muttype],
+                'best_acc': [self.best_acc],
+                'FLOPs_bestarch': [self.FLOPs_bestarch],
+                'Params_bestarch': [self.Params_bestarch],
                 'mean_accuracy': [self.mean_accuracy],
                 'std_accuracy': [self.std_accuracy],
                 'mean_flops': [self.mean_flops],
