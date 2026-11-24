@@ -7,11 +7,168 @@ from PlotterENAS import Plotter
 from globalsENAS import *
 from Surrogate_ENAS import Surrogate_ENAS
 from Stats_ENAS import *
+import shutil
+
+def ubuntu_SCN_stats_all_subfolders(experiment_folder = '', histograms = False):
+    for folder in os.scandir(experiment_folder):
+        if folder.is_dir():
+            print(folder.name)
+            ubuntu_SCN_stats(experiment_folder=folder, histograms=histograms)
+
+def ubuntu_split_all_csvs_in_folder(main_folder = ''):
+    for folder in os.scandir(main_folder):
+        if folder.is_dir():
+            print(folder.name)
+            split(folder)
+
+def ubuntu_collect_generation_csv_all_subfolders(main_folder = ''):
+    for folder in os.scandir(main_folder):
+        print(f'Collecting CSVs from subfolders in {folder.name}')
+        if folder.is_dir():
+            print(folder.name)
+            ubuntu_collect_generation_csv(main_folder=folder)
+
+def ubuntu_collect_generation_csv(main_folder = ''):
+            """
+            Collects all CSV files containing 'generation_status'
+            from each experiment subfolder and copies them into
+            a folder called generation_csv.
+            """
+            #output_folder = os.path.join(main_folder, "generation_csv")
+            output_folder = os.path.join(main_folder)
+            os.makedirs(output_folder, exist_ok=True)
+            for subfolder in os.listdir(main_folder):
+                subfolder_path = os.path.join(main_folder, subfolder)
+                if not os.path.isdir(subfolder_path):
+                    continue
+                # Avoid searching inside the output folder
+                if subfolder == "generation_csv":
+                    continue
+                for filename in os.listdir(subfolder_path):
+                    if (filename.lower().endswith(".csv")
+                            and "generation_status" in filename.lower()):
+                        print(f'Copying {filename}')
+                        source_file = os.path.join(subfolder_path, filename)
+                        # Add experiment name to avoid filename collisions
+                        destination_filename = f"{subfolder}_{filename}"
+                        destination_file = os.path.join(output_folder, destination_filename )
+                        shutil.copy2(source_file, destination_file)
+                        print(f"Copied: {source_file} -> {destination_file}")
+            print("\nGeneration CSV collection completed!")
 
 
-def plot_medians(experiment_folder):
+
+def ubuntu_organize_experiments(main_folder = ''):
+        '''
+        Moves folders according to codification and integer_encoding. For example, BREAL_INT2, BINT_INT1, etc.
+        '''
+        for folder_name in os.listdir(main_folder):
+            print(folder_name)
+            folder_path = os.path.join(main_folder, folder_name)
+            # Only process directories
+            if not os.path.isdir(folder_path):
+                continue
+            # Extract coding and INT
+            parts = folder_name.split("_")
+            if len(parts) < 3:
+                print(f"Skipping invalid folder: {folder_name}")
+                continue
+            codification = parts[0]
+            INT = parts[-1]
+            # Create destination: INT/codification
+            destination_folder = os.path.join(main_folder, INT, codification)
+            os.makedirs(destination_folder, exist_ok=True)
+            # Move original experiment folder
+            destination_path = os.path.join( destination_folder, folder_name  )
+            shutil.move(folder_path, destination_path)
+            print(f"Moved: {folder_name} -> {INT}/{codification}/")
+        print("\nExperiment organization completed!")
+
+
+def ubuntu_SCN_stats(experiment_folder = '', histograms = False):
+   
+    
+    def collect_data(main_folder, selected_columns):
+        results = {"SCNF": {col: [] for col in selected_columns}, "SCNG": {col: [] for col in selected_columns}}
+        for subfolder in os.listdir(main_folder):
+            subfolder_path = os.path.join(main_folder, subfolder)
+            if not os.path.isdir(subfolder_path):
+                continue
+            stats_folder = os.path.join(subfolder_path, "SCN_stats")
+            if not os.path.isdir(stats_folder):
+                continue
+            for filename in os.listdir(stats_folder):
+                if not filename.lower().endswith(".csv"):
+                    continue
+                if "SCNF" in filename:
+                    file_type = "SCNF"
+                elif "SCNG" in filename:
+                    file_type = "SCNG"
+                else:
+                    continue
+                filepath = os.path.join(stats_folder, filename)
+                df = pd.read_csv(filepath)
+                for col in selected_columns:
+                    value = pd.to_numeric(df[col].iloc[0], errors="coerce")
+                    if pd.notna(value):
+                        results[file_type][col].append(value)
+        return results
+
+    def calculate_statistics(values):
+        values = pd.Series(values, dtype=float)
+        return {
+            "mean": values.mean(),
+            "std": values.std(),
+            "min": values.min(),
+            "max": values.max(),
+            "median": values.median(),
+            "perc_10": values.quantile(0.10),
+            "perc_25": values.quantile(0.25),
+            "perc_75": values.quantile(0.75),
+            "perc_90": values.quantile(0.90)
+        }
+    def save_statistics(values, output_folder, column, file_type):
+        statistics = calculate_statistics(values)
+        output_file = os.path.join(output_folder, f"global_{column}_{file_type}.csv")
+        pd.DataFrame([statistics]).to_csv(output_file, index=False)
+        print(f"Statistics saved: {output_file}")
+
+    def generate_histogram(values, output_folder, column, file_type):
+        values = pd.Series(values, dtype=float).dropna()
+        plt.figure(figsize=(8, 5))
+        plt.hist(values, bins="auto", edgecolor="black",alpha=0.75)
+        plt.xlabel(column)
+        plt.ylabel("Frequency")
+        plt.title(f"Distribution of {column} - {file_type}")
+        plt.grid(axis="y", alpha=0.3)
+        plt.tight_layout()
+        output_file = os.path.join(output_folder, f"histogram_{column}_{file_type}.png")
+        plt.savefig(output_file, dpi=300,  bbox_inches="tight")
+        plt.close()
+        print(f"Histogram saved: {output_file}")
+
+
+    def generate_global_analysis(main_folder, selected_columns, histograms = False):
+        statistics_folder = os.path.join(main_folder, "global_statistics")
+        histogram_folder = os.path.join(main_folder, "global_histograms")
+        os.makedirs(statistics_folder, exist_ok=True)
+        os.makedirs(histogram_folder, exist_ok=True)
+        results = collect_data(main_folder, selected_columns)
+        # Process each type and selected column
+        for file_type in ["SCNF", "SCNG"]:
+            for col in selected_columns:
+                values = results[file_type][col]
+                save_statistics(values, statistics_folder, col, file_type)
+                generate_histogram(values, histogram_folder, col, file_type) if histograms else None
+        print("\nGlobal analysis completed!")
+    selected_columns = ["mean", "std", "min", "max", "median", "perc_10", "perc_25", "perc_75", "perc_90"]
+    generate_global_analysis(main_folder = experiment_folder, selected_columns = selected_columns, histograms = histograms)
+    #collect_generation_csv(main_folder = experiment_folder)
+    
+    
+def plot_medians(experiment_folder = ''):
     #Plot median measures
-    input_folder = experiment_folder
+    input_folder = os.path.join(experiment_folder, 'splitted')
     output_folder = os.path.join(experiment_folder, 'plots')
     ensure_folder_exists(input_folder)
     ensure_folder_exists(output_folder)
@@ -66,17 +223,17 @@ def summarizeFrame():
     frm = sg.Frame('Summarize', layout)
     return frm
 def csvToolsFrame():
-    layout = [ [splitFrame()], [mergeFrame()], [organizerFrame()], [summarizeFrame()]]
+    layout = [ [splitFrame()], [mergeFrame()], [organizerFrame()], [summarizeFrame()], [ubuntu_experiments_frame()]]
     return sg.Frame('CSV Tools', layout)
 
 def plotsFrame():
     generation_status_frame = sg.Frame('Generation Status', [ [
-        sg.Check('Generation status', key='CHK_GENERATION_STATUS_PLOT')],
+        sg.Check('Generation status', key='CHK_GENERATION_STATUS_PLOT'), sg.Check('Gen Status all subfolders', key='CHK_GENERATION_STATUS_SUBFOLDERS')],
         [
         sg.Check('Individual gstatus plots', key='CHK_GSTATUS_INDIVIDUAL'),
         sg.Check('Top_K gstatus plots', key='CHK_GSTATUS_TOP_K')],
-        [sg.Check('Gen Status all subfolders', key='CHK_GENERATION_STATUS_SUBFOLDERS'),sg.Check('Grouped gstatus plot (no window)', key='CHK_GSTATUS_GROUPED'), sg.Check('Win Method (special markers)', key = 'CHK_WIN_METHOD'),
-         sg.Check('Slice generations', key = 'CHK_SLICE_GENERATIONS')]
+        [sg.Check('Grouped gstatus plot (no window)', key='CHK_GSTATUS_GROUPED'), sg.Check('Win Method (special markers)', visible = False, key = 'CHK_WIN_METHOD'),
+         sg.Check('Slice generations', visible = False, key = 'CHK_SLICE_GENERATIONS')]
     ])
     layout = [
         [sg.Text('Experiment Folder'), sg.InputText(default_input_path, key='plots_input_folder', size=(None, 10)), sg.FolderBrowse(initial_folder=default_experiment_path)],
@@ -139,14 +296,29 @@ def rank1_stats_frame():
     frm = sg.Frame('Rank 1 Stats', layout)
     return frm
 
+def ubuntu_experiments_frame():
+    layout = [[sg.Text('Experiment Folder'), sg.InputText(default_input_path,key='ubuntu_experiments_input_folder', size = (None, 10)), sg.FolderBrowse(initial_folder=default_experiment_path),
+               sg.Check('Include subfolders', key = 'CHK_UBUNTU_ALL_SUBFOLDERS')],
+              
+              [sg.Button('Organize in folders', key = 'BTN_UBUNTU_ORGANIZE_EXPERIMENTS', tooltip = 'Organizes folders into subfolders like INT1/BREAL, INT2/BINT, etc.')],
+               [sg.Button('Extract all Gen status CSVs', key = 'BTN_UBUNTU_GET_ALL_GEN_STATUS_CSVS', tooltip = 'Folder must have all individual subfolders for each GO.')],
+               [sg.Button('Split all CSVs in folder', key = 'BTN_UBUNTU_SPLIT_ALL_CSVS_IN_FOLDER', tooltip = 'Splits all CSVs in the specified folder.')],
+               [sg.Check('Histograms', key = 'CHK_UBUNTU_HISTOGRAMS'), sg.Button('Get SCN stats', key = 'BTN_UBUNTU_SCN_STATS', tooltip = 'Folder must have all individual subfolders for each GO')]
+              ]
+    descr = 'Folders are mixed, such as BREAL_##_INT1, BBIN_##_INT2, BINT_##_INT1, etc.\nFirst, select main folder and organize in folders (INT1, INT2) and each one in BIN, REAL, INT'
+    descr += '\nNext, extract all gen_status CSVs. Do it per INT1 and INT2\n'
+    descr += '\nNext, split all CSVs in folder. Once again, do it per INT1 and INT2'
+    frm = sg.Frame('Ubuntu Experiments', layout, tooltip = descr)
+    return frm
+
 def main():
     os.system("cls")
     layout = [[csvToolsFrame(), plotsFrame()], [allFrame(), train_surrogate_frame(), wilcoxonFrame(), correlationFrame()], [flops_params_frame(),filter_csv_frame(),rank1_stats_frame()],
               [sg.Button('EXIT', key = 'BTN_EXIT')]]
     window = sg.Window('TECNAS', layout)
+    print('GUI begins')
     while True:
         start_time = time.time()
-
         event, values = window.read()
         if event == 'BTN_SPLIT_DEFAULT_FOLDERS':
             split(values['split_input_folder'])
@@ -178,6 +350,7 @@ def main():
                 sg.popup('CSVs organized by window successfully!')
 
         elif event == 'BTN_PLOT':
+           
             plotter = Plotter(values['plots_input_folder'])
             if values['CHK_SUMMARIES_PLOTS']:
                 if values['CHK_BESTARCHS_SUMMARIZE_PLOTS']:
@@ -195,26 +368,33 @@ def main():
                 plotter.plot_convergence_exec_grouped()
                 sg.popup('Convergence grouped plots created successfully!')
             if values['CHK_MEDIANS_PLOT']:
-                plotter.get_all_medians_folder()
+                plot_medians()
                 sg.popup('Medians plots created successfully!')
             if values['CHK_BOXPLOTS']:
                 plotter.boxplot_from_folder()
                 sg.popup('Boxplots created successfully!')
             if values['CHK_GENERATION_STATUS_PLOT']: 
+                #sg.popup(f"{values['CHK_GENERATION_STATUS_PLOT'] = }\n{values['CHK_GSTATUS_GROUPED'] = }")
                 if values['CHK_GSTATUS_INDIVIDUAL']:
                     print('Individual convergence plots for generation status begin')
                     plotter.plot_generation_status(individual_plots = True)
                     print('Individual convergence plots for generation status done\n')
                 if values['CHK_GSTATUS_TOP_K']:
                     print('Top K convergence plots for generation status begin')
-                    plotter.plot_generation_status(topK_plots = True, nsga2_window = values['CHK_WIN_METHOD'])
+                    if values['CHK_GENERATION_STATUS_SUBFOLDERS']:
+                        plotter.plot_generation_status_all_subfolders(root_folder = values['plots_input_folder'], topK_plots=True)
+                    else:
+                        plotter.plot_generation_status(topK_plots = True, nsga2_window = values['CHK_WIN_METHOD'])
                     print('Top K convergence plots for generation status done\n')
                 if values['CHK_GSTATUS_GROUPED']:
                     print(f'Convergence grouped plots for generation status begins')
-                    plotter.plot_grouped_generation_status_all_subfolders(root_folder = values['plots_input_folder'], nsga2_window = values['CHK_WIN_METHOD'], slice_generations = values['CHK_SLICE_GENERATIONS']) if values['CHK_GENERATION_STATUS_SUBFOLDERS'] else plotter.plot_grouped_generation_status(nsga2_window = values['CHK_WIN_METHOD'], slice_generations = values['CHK_SLICE_GENERATIONS'])
+                    if values['CHK_GENERATION_STATUS_SUBFOLDERS']:
+                        plotter.plot_grouped_generation_status_all_subfolders(root_folder = values['plots_input_folder'], nsga2_window = values['CHK_WIN_METHOD'], slice_generations = values['CHK_SLICE_GENERATIONS'])  
+                    else:
+                        plotter.plot_grouped_generation_status(nsga2_window = values['CHK_WIN_METHOD'], slice_generations = values['CHK_SLICE_GENERATIONS'])
                     print(f'Convergence grouped plots for generation status done\n')
                 sg.popup('Generation status plots created successfully!')
-
+        
         elif event == 'BTN_TRAIN_SURROGATES':
             train_surrogates_folder(values['surrogate_input_folder'], int(values['SLD_MODEL_CHOICE']))
             sg.popup('Surrogates trained successfully!')
@@ -285,6 +465,32 @@ def main():
             df_folder_path = os.path.join(values['rank1_stats_input_folder'])
             rank1_statistics_folder(experiment_folder = df_folder_path)
             sg.popup('Rank 1 statistics computed successfully!')
+
+        elif event == 'BTN_UBUNTU_SCN_STATS':
+            if values['CHK_UBUNTU_ALL_SUBFOLDERS']:
+                ubuntu_SCN_stats_all_subfolders(experiment_folder = values['ubuntu_experiments_input_folder'], histograms = values['CHK_UBUNTU_HISTOGRAMS'])
+            else:
+                ubuntu_SCN_stats(experiment_folder = values['ubuntu_experiments_input_folder'], histograms = values['CHK_UBUNTU_HISTOGRAMS'])
+            sg.popup('Ubuntu experiments analysis completed successfully!')
+
+        elif event == 'BTN_UBUNTU_GET_ALL_GEN_STATUS_CSVS':
+            if values['CHK_UBUNTU_ALL_SUBFOLDERS']:
+                ubuntu_collect_generation_csv_all_subfolders(main_folder = values['ubuntu_experiments_input_folder'])
+            else:
+                ubuntu_collect_generation_csv(main_folder = values['ubuntu_experiments_input_folder'])
+            sg.popup('All generation status CSVs collected successfully!')
+
+        elif event == 'BTN_UBUNTU_SPLIT_ALL_CSVS_IN_FOLDER':
+            if values['CHK_UBUNTU_ALL_SUBFOLDERS']:
+                ubuntu_split_all_csvs_in_folder(main_folder = values['ubuntu_experiments_input_folder'])
+            else:
+                split(values['ubuntu_experiments_input_folder'])
+            sg.popup('All CSVs in folder split successfully!')
+
+        elif event == 'BTN_UBUNTU_ORGANIZE_EXPERIMENTS':
+            ubuntu_organize_experiments(main_folder = values['ubuntu_experiments_input_folder'])
+            sg.popup('Ubuntu experiments organized successfully!')
+        
         elif event in (sg.WIN_CLOSED, 'BTN_EXIT'):
             break
         else:
@@ -309,7 +515,7 @@ default_experiment_path = r'C:\Users\xaero\OneDrive - Instituto Tecnologico y de
 default_input_path = default_experiment_path
 
 main()
-
+    
 #df_full_path = r'C:\Users\xaero\OneDrive\ITESM DCC\Layer_article\results\test_experiment\merged.csv'
 
 

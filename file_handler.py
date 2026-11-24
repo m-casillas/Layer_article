@@ -206,4 +206,4 @@ def merge(experiment_folder):
     output_folder = os.path.join(experiment_folder)
     ensure_folder_exists(input_folder)
     ensure_folder_exists(output_folder)
-    merge_csv_files(input_folder, output_folder, output_file='merged.csv', delete_duplicates=True)
+    merge_csv_files(input_folder, output_folder, output_file='merged.csv', delete_duplicates=False)

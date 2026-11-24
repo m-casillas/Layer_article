@@ -1,5 +1,3 @@
-# Refactored Plotter Class
-# Generated from ChatGPT refactor request
 import ast
 import math
 import os
@@ -17,23 +15,40 @@ class Plotter:
     DEFAULT_FIGSIZE = (14, 8)
     DEFAULT_DPI = 300
     CROSSOVER_COLORS = {
-        'SPC': '#1f77b4',  # blue
-        'TPC': '#d62728',  # red
-        'UC': '#2ca02c',   # green
-        'SBX': '#9467bd',  # purple
+        'SPC':  '#1f77b4',  # blue
+        'TPC':  '#d62728',  # red
+        'UC':   '#2ca02c',  # green
+        'SBX':  '#9467bd',  # purple
         'NONE': '#ff7f0e',  # orange
-        'HHSE': "#793939"   # cyan
+        'HHSE': '#793939',  # brown
+
+        'SPC2':  '#17becf',  # cyan
+        'TPC2':  '#e377c2',  # pink
+        'UC2':   '#8c564b',  # brown
+        'SBX2':  '#bcbd22',  # olive
+        'NONE2': '#7f7f7f',  # gray
+        'HHSE2': '#aec7e8',  # light blue
     }
     MUTATION_COLORS = {
-    'MPOLY': '#1f77b4',   # blue
-    'MNUF': '#d62728',    # red
-    'NONE': '#2ca02c',    # green
-    'MSWAP': '#9467bd',   # purple
-    'MPAR': '#ff7f0e',    # orange
-    'MBFLIP': '#17becf',   # cyan
-    'RANDOM': '#000000',
-    'AOS': '#8c564b',
-    'HAOS': '#ffd700'
+        'MPOLY':  '#1f77b4',  # blue
+        'MNUF':   '#d62728',  # red
+        'NONE':   '#2ca02c',  # green
+        'MSWAP':  '#9467bd',  # purple
+        'MPAR':   '#ff7f0e',  # orange
+        'MBFLIP': '#17becf',  # cyan
+        'RANDOM': '#000000',  # black
+        'AOS':    '#8c564b',  # brown
+        'HAOS':   '#ffd700',  # gold
+
+        'MPOLY2':  '#e377c2',  # pink
+        'MNUF2':   '#7f7f7f',  # gray
+        'NONE2':   '#bcbd22',  # olive
+        'MSWAP2':  '#a55194',  # dark magenta
+        'MPAR2':   '#8c6d31',  # dark golden brown
+        'MBFLIP2': '#f781bf',  # light pink
+        'RANDOM2': '#636363',  # dark gray
+        'AOS2':    '#98df8a',  # light green
+        'HAOS2':   '#c49c94',  # muted rose
     }
 
     WINDOW_COLORS = {
@@ -86,6 +101,8 @@ class Plotter:
         self.columns_GA = config_tecnas.plot_GAcolumns
         #self._create_folders(self.experiment_folder, self.plot_folder,  self.splitted_folder,  self.boxplots,  self.bestarchs_summaries_folder, self.GAs_summaries_folder)
         sns.set_theme(style='whitegrid', context='talk', palette='tab10')
+        self.unknown_crossover_styles = {}
+        self.unknown_mutation_styles = {}
 
     @staticmethod
     def get_window_color(hex_color = '', Wnum = 0, min_W=0, max_W=100):
@@ -113,7 +130,22 @@ class Plotter:
         plt.close()
 
     @staticmethod
-    def _compute_tendency(values, window_ratio=0.1):
+    def _compute_tendency(values, window_ratio=0.02):
+        from scipy.signal import savgol_filter
+        values = np.asarray(values, dtype=float)
+        values[~np.isfinite(values)] = np.nan
+        series = pd.Series(values)
+        series = series.interpolate(limit_direction='both')
+        window = max(3, int(window_ratio * len(values)))
+        if window % 2 == 0:
+            window += 1
+        window = min(window, len(values) if len(values) % 2 else len(values)-1)
+        # Filtro Savitzky-Golay
+        tendency = savgol_filter(series.to_numpy(), window_length=window,  polyorder=2 )
+        return values
+        return tendency
+        
+    def _compute_tendency2(values, window_ratio=0.1):
         window = max(3, int(window_ratio * len(values)))
         return (pd.Series(values).rolling(window, center=True, min_periods=1).mean().to_numpy())
 
@@ -242,7 +274,7 @@ class Plotter:
         ax.yaxis.get_offset_text().set_fontsize(6)
         ax.grid(True, linestyle='--', alpha=0.3)
 
-    def _get_visual_style(self, crossover, mutation, W_num = -1):
+    def _get_visual_style2(self, crossover, mutation, W_num = -1):
         
         if crossover == 'NONE' and mutation == 'NONE':
             return {'color': 'black',  'marker': 'X', 'linestyle': '-'}
@@ -253,14 +285,77 @@ class Plotter:
             #return {'color': Plotter.get_window_color(hex_color = self.WINDOW_COLORS.get(W_num, 'black'), Wnum = W_num), 'marker': self.WINDOW_MARKERS .get(W_num, 'o'), 'linestyle': self.CROSSOVER_LINESTYLES.get(crossover, '-')}
         else:
             return {'color': self.MUTATION_COLORS.get(mutation, 'black'),'marker': self.CROSSOVER_MARKERS.get(crossover, 'o'), 'linestyle': self.CROSSOVER_LINESTYLES.get(crossover, '-')}
-        
-        
 
+    def _get_visual_style(self, crossover, mutation, W_num=-1):
+        if crossover == 'NONE' and mutation == 'NONE':
+            return {'color': 'black', 'marker': 'X', 'linestyle': '-'}
+
+        # ==========================================================
+        # WINDOW METHODS
+        # ==========================================================
+        if W_num != -1:
+
+            if crossover in self.CROSSOVER_COLORS:
+                color = self.CROSSOVER_COLORS[crossover]
+            else:
+                if crossover not in self.unknown_crossover_styles:
+                    color = '#' + ''.join(random.choices('0123456789ABCDEF', k=6))
+                    marker = random.choice(['o', 's', '^', 'D', 'P', 'X', '*', 'p', 'h', 'v'])
+                    self.unknown_crossover_styles[crossover] = {
+                        'color': color,
+                        'marker': marker
+                    }
+
+                color = self.unknown_crossover_styles[crossover]['color']
+
+            marker = self.WINDOW_MARKERS.get(W_num, 'o')
+
+            return {
+                'color': color,
+                'marker': marker,
+                'linestyle': self.CROSSOVER_LINESTYLES.get(crossover, '-')
+            }
+
+        # ==========================================================
+        # NORMAL METHODS
+        # ==========================================================
+        if mutation in self.MUTATION_COLORS:
+            color = self.MUTATION_COLORS[mutation]
+        else:
+            if mutation not in self.unknown_mutation_styles:
+                color = '#' + ''.join(random.choices('0123456789ABCDEF', k=6))
+                marker = random.choice(['o', 's', '^', 'D', 'P', 'X', '*', 'p', 'h', 'v'])
+                self.unknown_mutation_styles[mutation] = {
+                    'color': color,
+                    'marker': marker
+                }
+
+            color = self.unknown_mutation_styles[mutation]['color']
+
+        if crossover in self.CROSSOVER_MARKERS:
+            marker = self.CROSSOVER_MARKERS[crossover]
+        else:
+            if crossover not in self.unknown_crossover_styles:
+                color_random = '#' + ''.join(random.choices('0123456789ABCDEF', k=6))
+                marker_random = random.choice(['o', 's', '^', 'D', 'P', 'X', '*', 'p', 'h', 'v'])
+                self.unknown_crossover_styles[crossover] = {
+                    'color': color_random,
+                    'marker': marker_random
+                }
+
+            marker = self.unknown_crossover_styles[crossover]['marker']
+
+        return {
+            'color': color,
+            'marker': marker,
+            'linestyle': self.CROSSOVER_LINESTYLES.get(crossover, '-')
+        }
+        
     
     def get_median_oneCombination(self, df, cross, mut):
         print(f'Processing median: {cross} - {mut}')
         last_generation = df['Generation'].max()
-        df_filtered = df[ (df['Crossover_type'] == cross) & (df['Mutation_type'] == mut) & (df['arch_status'] == 'BEST')]
+        df_filtered = df[ (df['Crossover_type'] == cross) & (df['Mutation_type'] == mut)]
         df_last_gen = df_filtered[ df_filtered['Generation'] == last_generation ]
         df_sorted = df_last_gen.sort_values( by='Accuracy').reset_index(drop=True)
         median_row = df_sorted.iloc[len(df_sorted) // 2]
@@ -351,6 +446,7 @@ class Plotter:
             plt.xticks(rotation=90, ha='right', fontsize=6)
             plt.yticks(fontsize=6)
             plt.tight_layout()
+            ensure_folder_exists(self.boxplots)
             plot_path = os.path.join(self.boxplots, f'boxplot_{column}.png')
             self._save_plot(plot_path, dpi=200)
             print(f'Boxplot boxplot_{column}.png saved successfully!\n')
@@ -542,6 +638,10 @@ class Plotter:
                 top_k_data = ranked_data[:k_best]
                 fig, ax = plt.subplots(figsize=self.DEFAULT_FIGSIZE)
                 self._plot_top_k_operators(ax=ax, top_k=top_k_data, column=column, mode=mode, plot_raw_data=plot_raw_data, nsga2_window=nsga2_window, use_random_colors=use_random_colors)
+                if 'SCN' in column:
+                    ax.axhline(y=0.5, color='red', linestyle='--', linewidth=1.5, alpha=0.8)
+                    ax.set_ylim(0, 1)
+
                 ax.set_title(f'Operators by AUC\n{config_tecnas.plot_convergency_generation_status_title_names[column]}', fontsize=16, pad=20)
                 all_generations = np.concatenate([data['generations']  for _, _, data in top_k_data])
                 self._apply_axis_style(ax,  ylabel=column, ticks=self._get_ticks(all_generations) )
@@ -584,6 +684,9 @@ class Plotter:
                     if nsga2_window:
                         for line in self.NSGA2_LINES:
                             ax.axvline(x=line,color='red',linestyle=':',linewidth=1,alpha=0.9)
+                    if 'SCN' in column:
+                        ax.axhline(y=0.5, color='red', linestyle='--', linewidth=1.5, alpha=0.8)
+                        ax.set_ylim(0, 1)
                     ax.set_title(f'{data["search_name"]} - {column} per Generation')
                     self._apply_axis_style(ax, ylabel=column, ticks=self._get_ticks(generations))
                     plt.tight_layout()
@@ -605,6 +708,22 @@ class Plotter:
                     plt.close()
                     print(f'Saved -> {stem}_{column}.png')
     # =============================================================================== ALL SUBFOLDERS ============================================================================
+    def plot_generation_status_all_subfolders(self, root_folder, individual_plots=False, topK_plots=False, nsga2_window=False, use_random_colors=False, plot_raw_data=False, window_tend=5, k_best=35):
+        original_folder = self.splitted_folder
+        splitted_name = os.path.basename(original_folder)
+        print(f'Plotting subfolders in {root_folder} ')
+        for entry in os.scandir(root_folder):
+            print(f'Checking folder: {entry}')
+            splitted_path = os.path.join(entry.path, splitted_name)
+            print(f'Checking path: {splitted_path}')
+            if not os.path.isdir(splitted_path):
+                print(f"Skipping {entry.name}: {splitted_name}' folder not found" )
+                continue
+            print(f"Processing {splitted_path}")
+            self.splitted_folder = splitted_path
+            self.plot_folder = os.path.join(entry.path, 'plots')
+            self.plot_generation_status(individual_plots=individual_plots, topK_plots=topK_plots, nsga2_window=nsga2_window, use_random_colors=use_random_colors, plot_raw_data=plot_raw_data, window_tend=window_tend, k_best=k_best)
+    
     def plot_grouped_generation_status_all_subfolders(self,   root_folder,  nsga2_window=False, slice_generations=False, use_random_colors=False,  plot_raw_data=False,  window_tend=5,  k_best=35  ):
         #self.experiment_folder = experiment_folder
         #self.plot_folder = os.path.join(experiment_folder, 'plots')
@@ -612,8 +731,11 @@ class Plotter:
         #self.plot_folder = os.path.join(experiment_folder, 'plots')
         original_folder = self.splitted_folder
         splitted_name = os.path.basename(original_folder)
+        print(f'Plotting subfolders in {root_folder} ')
         for entry in os.scandir(root_folder):
+            print(f'Checking folder: {entry}')
             splitted_path = os.path.join(entry.path, splitted_name)
+            print(f'Checking path: {splitted_path}')
             if not os.path.isdir(splitted_path):
                 print(f"Skipping {entry.name}: {splitted_name}' folder not found" )
                 continue

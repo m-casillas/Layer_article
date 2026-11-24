@@ -127,11 +127,10 @@ def Wilcoxon_ENAS(experiment_folder):
         df2 = pd.read_csv(file2_path, encoding='utf-8')
 
         #Get the best architecture from the last generation
-        df1Best = df1[ (df1['arch_status'] == 'BEST') & (df1['Generation'] == df1['Generation'].max()) ]
-        df2Best = df2[(df2['arch_status'] == 'BEST') & (df2['Generation'] == df2['Generation'].max()) ]
-
-        data1 = df1Best['Accuracy']
-        data2 = df2Best['Accuracy']
+        df1Best = df1[ df1['Generation'] == df1['Generation'].max() ]
+        df2Best = df2[ df2['Generation'] == df2['Generation'].max() ]
+        data1 = df1Best['mean_accuracy']
+        data2 = df2Best['mean_accuracy']
 
         #stat, p_value = wilcoxon(data1, data2)
         stat, p_value = mannwhitneyu(data1, data2, alternative='two-sided')
@@ -164,7 +163,8 @@ def correlation_matrix_folder(experiment_folder = ''):
         print(f"Correlation matrix {file}...")
         df = pd.read_csv(file)
 
-        dfBestGen = df[df['arch_status'] == 'BEST']
+        #dfBestGen = df[df['arch_status'] == 'BEST']
+        dfBestGen = df
         candidate_cols = (config_tecnas.plot_archcolumns + config_tecnas.plot_GAcolumns)
 
         # 1. Keep only columns that actually exist in the dataframe
@@ -226,7 +226,8 @@ def correlation_matrix_execution(experiment_folder = ''):
         for exec in executions:
             print(f'Correlation matrix for {filename} execution {exec}...')
             dfexec = df[df['Execution'] == exec]
-            dfBestGen = dfexec[dfexec['arch_status'] == 'BEST']
+            #dfBestGen = dfexec[dfexec['arch_status'] == 'BEST']
+            dfBestGen = dfexec
             candidate_cols = (config_tecnas.plot_archcolumns + config_tecnas.plot_GAcolumns)
             # 1. Keep only columns that actually exist in the dataframe
             existing_cols = [c for c in candidate_cols if c in dfBestGen.columns]

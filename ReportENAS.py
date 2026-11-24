@@ -97,6 +97,8 @@ class ReportENAS:
         df = pd.DataFrame(statusObj.dict_archinfo)
         df.to_csv(path_report,  mode="a",  header = not header_written, index=False)
         header_written = True
+        print(f'Saving generation status complete')
+
 
     def save_arch_info(self, tecnasObj, arch = None, epochs = ConfigClass.EPOCHS):
         
@@ -117,12 +119,14 @@ class ReportENAS:
              'Progress': tecnasObj.generation/config_tecnas.GENERATIONS,
              'isChild': arch.isChild,
              'isMutant': arch.isMutant,
+             'INTEGER_ENCODING2': str(tecnasObj.INTEGER_ENCODING2),
              'Integer_encoding': str(arch.integer_encoding),
+             'Integer_encoding2': str(arch.integer_encoding2),
              'Binary_encoding': str(arch.binary_encoding),
              'Real_encoding': str(arch.real_encoding),
              'Genotype': str(arch.genotype.gen_list), 
              'Crossover_type': tecnasObj.crossover_type if tecnasObj.HHSE == False else 'HHSE',
-             'Mutation_type': (tecnasObj.mutation_type  if not tecnasObj.HHSE  else ("NSGA2" if config_tecnas.NSGA2 else "-")),
+             'Mutation_type': (tecnasObj.mutation_type  if not tecnasObj.HHSE  else ("NSGA2" if tecnasObj.NSGA2 else "-")),
              'Search_strategy': tecnasObj.search_strategy,
              'Epochs':len(arch.acc_hist),
              'Accuracy_history': arch.acc_hist,
@@ -133,13 +137,13 @@ class ReportENAS:
              'Loss': arch.loss, 
              'FLOPs': arch.flops, 
              'Num_Params': arch.num_params, 
-             'SizeMB': arch.sizeMB,
              'P1_idx': arch.P1Idx,
              'P2_idx': arch.P2Idx,
              'P1': arch.P1IntegerEncoding,
              'P2': arch.P2IntegerEncoding,
              'Before_Mut': arch.before_mutationIntegerEndcoding,
              'HV': tecnasObj.HV,
+             'Riesz': tecnasObj.riesz_energy,
              'dHV': tecnasObj.dHV,
              'HD_P1': arch.dP1,
              'HD_P2': arch.dP2,
@@ -162,7 +166,7 @@ class ReportENAS:
              #'cm_recall_macro': arch.cm_recall_macro,
              #'cm_f1_macro': arch.cm_f1_macro,
              'Ranking': '',
-             'NSGA2': config_tecnas.NSGA2,
+             'NSGA2': tecnasObj.NSGA2,
              'HHSE': tecnasObj.HHSE,  
              'HHSE_TYPE': f'MARKOV{"COMBINED" if tecnasObj.COMBINED_MARKOV else tecnasObj.markov_type}' if config_tecnas.HHSE_MARKOV else 'RANDOM' if config_tecnas.HHSE_RANDOM else 'GREEDY' if config_tecnas.HHSE_GREEDY else '',
              #'RAM': str(tecnasObj.RAM),

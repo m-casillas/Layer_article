@@ -17,6 +17,7 @@ class TECNAS_NSGAII:
         self.pop_size = pop_size
         self.tecnas = tecnasObj
         self.HV = 0
+        self.riesz_energy = 0
         self.evaluate(self.pop)
         
     def evaluate(self, archs):
@@ -66,9 +67,38 @@ class TECNAS_NSGAII:
             ref_point = np.array([1.01, 1.01, 1.01])
         ind = HV(ref_point=ref_point)
         hv = ind.do(pareto_front)
-        print(f"[NSGA-II] Hypervolume (normalized objectives): {hv:.4f}")
+        print(f"[NSGA-II] Hypervolume (normalized objectives): {hv:.6f}")
         
         return hv
+
+    def calculate_riesz_energy(self, F, s=2.0):
+        return 0
+        F = np.asarray(F, dtype=np.float64)
+
+        if F.ndim != 2:
+            raise ValueError("F must be a 2D array of shape (N, M)")
+
+        n = F.shape[0]
+
+        if n < 2:
+            return 0.0
+
+        diff = F[:, np.newaxis, :] - F[np.newaxis, :, :]
+        norms = np.linalg.norm(diff, axis=2) + 1e-12
+
+        np.fill_diagonal(norms, np.inf)
+
+        energy = np.sum(1.0 / norms**s)
+
+        # Logarithmic transformation proposed in the paper
+        log_energy = np.log1p(energy)
+
+        print(
+            f"[NSGA-II] Riesz s-energy (s={s}): "
+            f"{energy:.6e} | log-energy: {log_energy:.6f}"
+        )
+
+        return float(log_energy)
 
     def assign_rank_and_crowding(self):
         F = self._build_objective_matrix(self.pop)
@@ -123,6 +153,9 @@ class TECNAS_NSGAII:
         print('Calculating HyperVolume')
         self.HV = self.hypervolume(F, fronts, ref_point=None)
         print('Calculating HyperVolume complete')
+        print('Calculating Riesz s-energy')
+        self.riesz_energy = self.calculate_riesz_energy(F, s=2.0)
+        print('Calculating Riesz s-energy complete')
         selected_indices = []
         for front in fronts:
             if len(selected_indices) + len(front) <= self.pop_size:
@@ -137,7 +170,7 @@ class TECNAS_NSGAII:
         if config_tecnas.PLOT_PARETO and (self.tecnas.generation == 1 or self.tecnas.generation == config_tecnas.GENERATIONS or  self.tecnas.generation % 5  == 0):  
             self.plot_pareto_front_3D(F, fronts)
 
-        return [archs[i] for i in selected_indices], self.HV
+        return [archs[i] for i in selected_indices], self.HV, self.riesz_energy
 
     
     def plot_pareto_front_3D(self, F, fronts):

@@ -89,10 +89,12 @@ def set_HHSE_TEC_GOs(REPRESENTATION_TYPE, ENCODING_TYPE):
         return None, None, None
     return CROSS, MUT, HV
 
+
 #------------------------------------------------------------- EXPERIMENT SETTINGS ------------------------------------------------------------#
 
 REPRESENTATION_TYPE = 'B'  #L: layer, B: block
 ENCODING_TYPE = 'REAL' #INT: integer vector, BIN: binary vector, REAL: real vector (for block representation only)
+
 experiment_folder = 'BLOCKS_70EPOCHS' if REPRESENTATION_TYPE == 'B' else 'LAYERS_20EPOCHS'
 REPR_ENC_STR = f'{REPRESENTATION_TYPE}{ENCODING_TYPE}'
 
@@ -100,10 +102,14 @@ search_strategies_list = ['GA', 'RANDOM']
 crossover_types_list = ['SPC', 'TPC', 'UC', 'NONE'] if ENCODING_TYPE != 'REAL' else ['SPC', 'TPC', 'UC', 'SBX', 'NONE']
 mutation_types_list = set_mutation_types_list(REPRESENTATION_TYPE, ENCODING_TYPE)
 
-#search_strategies_list = ['GA']
-#crossover_types_list = ['UC']
-#mutation_types_list = ['MPOLY','MNUF', 'NONE']
-
+search_strategies_list = ['GA'] #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+crossover_types_list = ['SPC'] #['SPC', 'TPC']  #['SPC', 'TPC', 'UC', 'SBX', 'NONE'] 
+mutation_types_list = ['MPOLY']  #['MPOLY', 'MNUF'] #MPOLY NONE     #['MPAR', 'MSWAP', 'NONE']
+INTEGER_ENCODING2 = 0
+HYPER_MUTATION = 1
+HYPER_MUT_PROB = 0.50
+HYPER_MUT_THRESHOLD = 0.50 #Explore is less than this value, apply hyper mutation.
+#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 crossoverList_hhse = crossover_types_list
 mutationList_hhse = mutation_types_list
 
@@ -122,11 +128,11 @@ mutationList_hhse = mutation_types_list
 # GREEDY_FIXED_RANDOM: Random GOs are applied to generate population for each generation. Still, the other GOs are applied to get stats.
 #HHSE_TEC: Not greedy. It should use the best identified GOs for each stage. They must be selected according to some probability (given by the counts).
 
-SO_NORMAL, SO_HHSE, NSGA2_NORMAL, NSGA2_HHSE = (0, 0, 0, 1)
+SO_NORMAL, SO_HHSE, NSGA2_NORMAL, NSGA2_HHSE = (0, 0, 1, 0)
 HHSE, NSGA2 = set_strategy_flags(SO_NORMAL, SO_HHSE, NSGA2_NORMAL, NSGA2_HHSE)
 NSGA2_WINDOW = 0 if NSGA2_NORMAL else 0
 NSGA2_WINDOW_SIZE_PERC = 0.01
-HHSE_TEC, HHSE_MARKOV, HHSE_RANDOM, HHSE_GREEDY = (1,0,0,0) if HHSE else (0,0,0,0) 
+HHSE_TEC, HHSE_MARKOV, HHSE_RANDOM, HHSE_GREEDY = (0,0,1,0) if HHSE else (0,0,0,0) 
 HHSE_TEC_IMPROVED = False #True: applies GOs depending on stage: MUT, HV, CROSS.
 
 HHSE_GREEDY_FIXED, HHSE_GREEDY_FIXED_RANDOM = (1, 0) if HHSE_GREEDY else (0, 0)
@@ -135,7 +141,7 @@ HHSE_MARKOV_TYPES =  ['CROSS', 'MUT', 'HV', 'DHV']#, 'COMBINED'] #Use for single
 perc_intervals =  [40, 20, 30, 10] #CROSS HV DHV MUT for COMBINED MARKOV
 
 PLOT_PARETO = False
-IGNORE_RANDOM = True
+IGNORE_RANDOM = False
 
 if HHSE_GREEDY and HHSE_GREEDY_CRITERIA == 'CROSS':
     crossoverList_hhse = [GO for GO in crossoverList_hhse if GO != 'NONE']
@@ -144,18 +150,18 @@ if HHSE_GREEDY and HHSE_GREEDY_CRITERIA == 'MUT':
 
 
 #------------------------------------------------------------- \SEARCH STRATEGY ------------------------------------------------------------#
-
+ #integer_encoding represented as tuples of integers, for each CONV.
 INITIAL_SEED = 0
 RANDOMIZE_SEED = False
-
 DATASET_PART = 1 #Percentage of the DATASSET as decimal.
-MAIN_NPOP = 100#100
+MAIN_NPOP = 20#100
 EPOCHS = 70 #Number of epochs for training one architecture
-GENERATIONS = 500#500
-EXECUTIONS = 1 #30 execution is after #GENERATIONS
+GENERATIONS = 300
+EXECUTIONS = 2 #30 execution is after #GENERATIONS
 SEED_LIST = [i for i in range(INITIAL_SEED, INITIAL_SEED + EXECUTIONS)] if RANDOMIZE_SEED == False else random.sample(range(100000), EXECUTIONS)
 REGRESSOR_TYPE = 10
 
+calculate_SCNG, calculate_SCNF = (1,1)
 SURROGATE, TRAIN, SIMULATE = set_FLAGS(1, 0, 0)
 
 
@@ -165,8 +171,7 @@ REPORT_ONLY_BEST = True #Save BEST archs per generation. False saves all archs.
 REPORT_ALL_COLUMNS = False #Save full arch info in CSV
 RANDOM_NAMES = True #Random names for architecture instead of concatenating parents names.
 REPORT_BATCH_SIZE = GENERATIONS #How many archs are saved in the CSV file at once.
-
-
+GO_FILENAME = True #If True, it'll have the GO name (supposedly it'll be only one) use it for ubuntu experiments. Otherwise it'll have miliseconds in the name
 #------------------------------------------------------------- REPORTING ------------------------------------------------------------#
 
 PRINT1, PRINT2, PRINT3 = set_FLAGS(1, 0, 0) #Print levels
@@ -179,8 +184,9 @@ SORT_ARCHS = SORT_ARCHS_DICT[SORT_IDX]
 DATASET_LIST = ['CIFAR10', 'CIFAR100']
 DATASET_NUMDENSE_DICT = {'CIFAR10': 10, 'CIFAR100': 100}
 
-plot_archcolumns = ['mean_accuracy','mean_flops', 'mean_params','best_acc', 'FLOPs_bestarch','Params_bestarch']
-plot_GAcolumns =  ['HV', 'GD', 'succ_cross', 'succ_mut']
+#plot_archcolumns = ['mean_accuracy','mean_flops', 'mean_params','best_acc', 'FLOPs_bestarch','Params_bestarch']
+plot_archcolumns = ['mean_accuracy','mean_flops', 'mean_params']
+plot_GAcolumns =  ['HV', 'GD', 'succ_cross', 'succ_mut', 'perc_exploit_SCNG', 'perc_explore_SCNG', 'perc_exploit_SCNF', 'perc_explore_SCNF']
 #plot_archcolumns = ['Accuracy', 'FLOPs', 'Num_Params']#, 'Top1', 'Top5']
 #plot_archcolumns = ['Accuracy', 'cm_precision_macro', 'cm_recall_macro', 'cm_f1_macro', 'FLOPs', 'Num_Params']#, 'Top1', 'Top5']
 #plot_GAcolumns = ['HD_P1', 'HD_P2', 'HD_BM', 'HD_PB', 'Succ_Crossover_ratio', 'Succ_Mutation_ratio', 'NFHT', 'HV', 'GD']
@@ -188,14 +194,18 @@ plot_GAcolumns =  ['HV', 'GD', 'succ_cross', 'succ_mut']
 plot_convergency_columns = ['Accuracy']
 #plot_convergency_generation_status_columns = {'accuracy':['stats', 'max']}#, 'HV':['no_stats', 'max']}
 plot_convergency_generation_status_columns = {'mean_accuracy':['stats', 'max'], 'mean_flops':['stats', 'min'], 'mean_params':['stats', 'min'], 
-                                              'HV':['no_stats', 'max'], 'dHV':['no_stats', 'max'], 'GD':['no_stats', 'max'], 'succ_cross':['no_stats', 'max'], 'succ_mut':['no_stats', 'max'], 
-                                              'best_acc':['no_stats', 'max'], 'FLOPs_bestarch':['no_stats', 'min'], 'Params_bestarch':['no_stats', 'min']}
+                                              'HV':['no_stats', 'max'], #'Riesz':['no_stats', 'max'], 
+                                              'dHV':['no_stats', 'max'], 'GD':['no_stats', 'max'], 'succ_cross':['no_stats', 'max'], 'succ_mut':['no_stats', 'max'], 
+                                              'best_acc':['no_stats', 'max'], 'FLOPs_bestarch':['no_stats', 'min'], 'Params_bestarch':['no_stats', 'min'], 
+                                              'perc_exploit_SCNG':['no_stats', 'max'], 'perc_explore_SCNG':['no_stats', 'max'], 'perc_exploit_SCNF':['no_stats', 'max'], 'perc_explore_SCNF':['no_stats', 'max']}
 plot_convergency_generation_status_title_names = {'mean_accuracy':'Mean Pareto Front Accuracy', 'mean_flops':'Mean Pareto Front FLOPs', 'mean_params':'Mean Pareto Front Num_Params', 'HV':'Mean Normalized Hypervolume', 
-                                                  'dHV':'Mean Normalized dHV',
+                                                  'dHV':'Mean Normalized dHV', # 'Riesz':'Mean Riesz s-Energy',
                                                   'GD':'Mean Genotypic Distance', 'succ_cross':'Mean Succesful Crossover Ratio', 'succ_mut':'Mean Succesful Mutation Ratio', 
-                                                  'best_acc':'Mean Best Accuracy', 'FLOPs_bestarch':'Mean FLOPs from Best Architecture', 'Params_bestarch':'Mean Params from Best Architecture'}
-remove_report_columns = ['Epochs', 'Accuracy_history', 'Top1', 'Top5', 'Loss', 'SizeMB', 'Loss_history', 'CPU_Sec', 'P1_idx', 'P2_idx', 'P1', 'P2', 'Search_strategy', 'Chosen_operator', 'Selected_by'] #Discard these columns in report
+                                                  'best_acc':'Mean Best Accuracy', 'FLOPs_bestarch':'Mean FLOPs from Best Architecture', 'Params_bestarch':'Mean Params from Best Architecture',
+                                                  'perc_exploit_SCNG':'Mean SCNG Exploitation Ratio', 'perc_explore_SCNG':'Mean SCNG Exploration Ratio', 'perc_exploit_SCNF':'Mean SCNF Exploitation Ratio', 'perc_explore_SCNF':'Mean SCNF Exploration Ratio'}
+#remove_report_columns = ['Epochs', 'Accuracy_history', 'Top1', 'Top5', 'Loss', 'SizeMB', 'Loss_history', 'CPU_Sec', 'P1_idx', 'P2_idx', 'P1', 'P2', 'Search_strategy', 'Chosen_operator', 'Selected_by'] #Discard these columns in report
                               #'Succ_Crossover', 'Succ_Mutation', 'Total_Crossovers', 'Total_Mutations']
+remove_report_columns = ['Epochs', 'Accuracy_history', 'Top1', 'Top5', 'Loss', 'SizeMB', 'Loss_history', 'CPU_Sec','Search_strategy', 'Chosen_operator', 'Selected_by'] #Discard these columns in report
 
 #remove_status_columns = ['Generation', 'best_accuracy', 'mean_accuracy', 'mean_dP1', 'mean_dP2', 'mean_dBM', 'dPB',' HV', 'dHV', 'succ_cross', 'succ_mut']                
 remove_status_columns = ['Execution', 'Crossover_type', 'Mutation_type', 'Chosen_operator', 'Selected_by', 'GOs_history']

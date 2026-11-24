@@ -2,9 +2,6 @@
 
 import time
 
-import config_tecnas
-
-
 class Status:
     def __init__(self, tecnasObj = None, crosstype = '', muttype = '', pop = None, JUST_PARETO = False):
         self.pop = sorted(pop, key=lambda obj: obj.acc, reverse = True) #Best archs first by accuracy
@@ -17,6 +14,7 @@ class Status:
         self.GOs_history = [] #{'dPB': 'SPC_MPAR', 'TPC_MSWAP, 'UC_MSWAP', 'dHV': 'SPC_MPAR', 'TPC_MSWA',...}
         self.op_count = {}
         self.prev_HV = 0
+        self.riesz = self.tecnasObj.riesz_energy
         self.exec = self.tecnasObj.exec
         self.generation = self.tecnasObj.generation
         self.mean_accuracy = sum(arch.acc for arch in self.pop)/self.pop_size
@@ -30,13 +28,19 @@ class Status:
         self.mean_dBM = sum(arch.dBM for arch in self.pop)/self.pop_size
         self.dPB = self.pop[0].dPB
         self.best_acc = self.pop[0].acc
-        self.FLOPs_bestarch = self.pop[0].flops
-        self.Params_bestarch = self.pop[0].num_params
+        self.FLOPs_bestarch = self.pop[0].flops #min(arch.flops for arch in self.pop) #
+        self.Params_bestarch = self.pop[0].num_params #min(arch.num_params for arch in self.pop)
         self.best_accuracy = max(arch.acc for arch in self.pop)
         self.succ_cross = self.tecnasObj.succ_cross
         self.succ_mut = self.tecnasObj.succ_mut
         self.GD = self.tecnasObj.GD
         self.search_name = self.tecnasObj.search_name
+        self.perc_explore_SCNG = self.tecnasObj.perc_explore_SCNG
+        self.perc_exploit_SCNG = self.tecnasObj.perc_exploit_SCNG
+        self.perc_explore_SCNF = self.tecnasObj.perc_explore_SCNF
+        self.perc_exploit_SCNF = self.tecnasObj.perc_exploit_SCNF
+        self.INTEGER_ENCODING2 = tecnasObj.INTEGER_ENCODING2
+        self.distance_type = self.tecnasObj.distance_type
 
         if JUST_PARETO: #Save information of the architectures in the Pareto front, each generation. For NOT GREEDY techniques (why did I call it JUST_PARETO?)
             self.HV = self.tecnasObj.HV
@@ -50,10 +54,11 @@ class Status:
         self.succ_cross = self.tecnasObj.succ_cross/self.tecnasObj.total_cross if self.tecnasObj.total_cross > 0 else 0
         self.succ_mut = self.tecnasObj.succ_mut/self.tecnasObj.total_mut if self.tecnasObj.total_mut > 0 else 0
         self.generation = self.tecnasObj.generation
-        self.selected_by = config_tecnas.HHSE_GREEDY_CRITERIA #self.tecnasObj.selected_by
+        self.selected_by = self.tecnasObj.HHSE_GREEDY_CRITERIA #self.tecnasObj.selected_by
         
         self.dict_archinfo = {'Execution': [self.exec],
-                'Repr_Enc':[config_tecnas.REPR_ENC_STR],                    
+                'INTEGER_ENCODING2': [self.INTEGER_ENCODING2],
+                'Repr_Enc':[self.tecnasObj.REPR_ENC_STR],                    
                 'Generation': [self.generation],
                 'Crossover_type': [self.crosstype],
                 'Mutation_type': [self.muttype],
@@ -66,11 +71,17 @@ class Status:
                 'std_flops': [self.std_flops],
                 'mean_params': [self.mean_params],
                 'std_params': [self.std_params],
+                'Riesz': [self.riesz],
                 'HV': [self.HV],
                 'dHV': [self.dHV],
                 'succ_cross': [self.succ_cross],
                 'succ_mut': [self.succ_mut],
                 'GD': [self.GD],
+                'perc_explore_SCNG': [self.perc_explore_SCNG],
+                'perc_exploit_SCNG': [self.perc_exploit_SCNG],
+                'perc_explore_SCNF': [self.perc_explore_SCNF],
+                'perc_exploit_SCNF': [self.perc_exploit_SCNF],
+                'distance_type': [self.distance_type],
                 'search_name': [self.search_name]
         }
 

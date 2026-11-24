@@ -97,9 +97,9 @@ search_strategies_list = ['GA', 'RANDOM']
 crossover_types_list = ['SPC', 'TPC', 'UC', 'NONE'] if ENCODING_TYPE != 'REAL' else ['SPC', 'TPC', 'UC', 'SBX', 'NONE']
 mutation_types_list = set_mutation_types_list(REPRESENTATION_TYPE, ENCODING_TYPE)
 
-#search_strategies_list = ['GA']
-#crossover_types_list = ['UC']
-#mutation_types_list = ['MPOLY','MNUF', 'NONE']
+search_strategies_list = ['GA']
+crossover_types_list = ['SPC']
+mutation_types_list = ['MPOLY']
 
 crossoverList_hhse = crossover_types_list
 mutationList_hhse = mutation_types_list
@@ -146,8 +146,8 @@ RANDOMIZE_SEED = False
 DATASET_PART = 1 #Percentage of the DATASSET as decimal.
 MAIN_NPOP = 4
 EPOCHS = 70 #Number of epochs for training one architecture
-GENERATIONS = 10#500
-EXECUTIONS = 2#30 #1 execution is after #GENERATIONS
+GENERATIONS = 1#500
+EXECUTIONS = 1#30 #1 execution is after #GENERATIONS
 SEED_LIST = [i for i in range(INITIAL_SEED, INITIAL_SEED + EXECUTIONS)] if RANDOMIZE_SEED == False else random.sample(range(100000), EXECUTIONS)
 REGRESSOR_TYPE = 10
 
@@ -156,9 +156,9 @@ SURROGATE, TRAIN, SIMULATE = set_FLAGS(1, 0, 0)
 
 #------------------------------------------------------------- REPORTING ------------------------------------------------------------#
 REPORT_ARCH = True #Save arch info in CSV
-REPORT_ONLY_BEST = True #Save BEST archs per generation. False saves all archs.
+REPORT_ONLY_BEST = False #Save BEST archs per generation. False saves all archs.
 REPORT_ALL_COLUMNS = False #Save full arch info in CSV
-RANDOM_NAMES = True #Random names for architecture instead of concatenating parents names.
+RANDOM_NAMES = False #Random names for architecture instead of concatenating parents names.
 REPORT_BATCH_SIZE = GENERATIONS #How many archs are saved in the CSV file at once.
 
 

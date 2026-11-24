@@ -14,6 +14,8 @@ from tensorflow.keras.layers import Input
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 '''
+import numpy
+
 from TECNAS_AOS import TECNAS_AOS
 from TECNAS_NSGAII import TECNAS_NSGAII
 from Status import Status
@@ -47,20 +49,318 @@ class TECNAS:
         REP_CONSTANTS = LAYERS_CONSTANTS
     elif ConfigClass.REPRESENTATION_TYPE == 'B':
         REP_CONSTANTS = BLOCKS_CONSTANTS
+        REP_CONSTANTS.SPC_INDEXES = list(range(REP_CONSTANTS.SIZE_BLOCKGEN*2)) if config_tecnas.INTEGER_ENCODING2 else REP_CONSTANTS.SPC_INDEXES
 
-    def calculate_SCN(self, arch_integer_encoding):
-        #Calculate Similariy of Closest Neighbbor of current individual with all generatios.
-        min_dist = float('inf')
-        for integer_encoding in self.integer_encoding_history:
-            dist = hamming_distance(arch_integer_encoding, integer_encoding)
-            if dist < min_dist:
-                min_dist = dist
-                if dist == 1: #No need to continue checking.
-                    break
-        return min_dist
+    def validate_encoding_genetic_operators(self):
+        valid_cross = {'BIN': ['SPC', 'TPC', 'UC', 'NONE'], 'INT': ['SPC', 'TPC', 'UC', 'NONE'], 'REAL': ['SPC', 'TPC', 'UC', 'SBX', 'NONE']}
+        valid_mut = {'BIN': ['MBFLIP', 'NONE'], 'INT': ['MSWAP', 'MPAR', 'NONE'], 'REAL': ['MPOLY', 'MNUF', 'NONE']}
+        # CHeck from the dictionary if the current encoding type has valid crossover and mutation types
+        if self.encoding_type not in valid_cross or self.encoding_type not in valid_mut:
+            print(f"{Fore.RED} Error: Invalid encoding type {self.encoding_type}. Valid types are: {list(valid_cross.keys())}{Fore.RESET}")
+            return False
+        if self.crossover_type not in valid_cross[self.encoding_type]:
+            print(f"{Fore.RED} Error: Invalid crossover type {self.crossover_type} for encoding type {self.encoding_type}. Valid types are: {valid_cross[self.encoding_type]}{Fore.RESET}")
+            return False
+        if self.mutation_type not in valid_mut[self.encoding_type]:
+            print(f"{Fore.RED} Error: Invalid mutation type {self.mutation_type} for encoding type {self.encoding_type}. Valid types are: {valid_mut[self.encoding_type]}{Fore.RESET}")
+            return False
+        return True
+        
+
+    def vector_to_arch(self, intvec = None, arch_obj1_idx = None, arch_obj2_idx = None, is_first_child = False, is_mutant = False):
+        #intvec is integer_encoding only.
+        idx1 = arch_obj1_idx+'|'+arch_obj2_idx+'(1)' if is_first_child else arch_obj1_idx+'|'+arch_obj2_idx+'(2)'
+        idx1 = Architecture.set_arch_name(idx1)
+        gen_list = BlockRepresentation.integer_vector_to_genList(intvec)
+        arch = BlockRepresentation(idx = idx1, genotypeObj = Genotype('B', ConfigClass.ENCODING_TYPE, gen_list), INTEGER_ENCODING2 = self.INTEGER_ENCODING2)
+        arch.integer_encoding, arch.integer_encoding2, arch.integer_encoding2_flattened, arch.real_encoding, arch.real_encoding2, arch.real_encoding2_flattened, arch.binary_encoding, arch.binary_encoding2_flattened = BlockRepresentation.update_vector_encodings(int_vec = intvec, INTEGER_ENCODING2 = self.INTEGER_ENCODING2, binary_encoding = True if self.encoding_type == 'BIN' else False)                            
+        return arch
+
+    
+    def SCN_stats_histogram(self):
+        cross_mut_str = f'{self.crossover_type}_{self.mutation_type}'
+        cross_mut_str = self.REPR_ENC_STR + '_' + self.search_name
+        def save_histogram(data=[], scn_type='', stats=None):
+            plt.figure()
+            plt.hist(data, bins=30, alpha=0.7, color='blue', edgecolor='black')
+            plt.axvline(stats['min'], color='black', linestyle='-', linewidth=1,label=f'Min = {stats["min"]:.4f}')
+            plt.axvline(stats['max'], color='black', linestyle='-', linewidth=1,label=f'Max = {stats["max"]:.4f}')
+            plt.axvline(stats['mean'], color='blue', linestyle='-', linewidth=1, label=f'Mean = {stats["mean"]:.4f}')
+            plt.axvline(stats['median'], color='red', linestyle='-', linewidth=1, label=f'Median = {stats["std"]:.4f}')
+            for p, value in stats['percentiles'].items():
+                color = 'green' if p < 50 else 'orange'
+                linestyle = '--'
+                linewidth = 1
+                label = f'P{p} = {value:.4f}'
+                plt.axvline(value, color=color, linestyle=linestyle, linewidth=linewidth, label=label)
+            plt.title(f'{cross_mut_str} SCN_{scn_type} Histogram\nExecution {self.exec}')
+            plt.xlabel(f'SCN_{scn_type} Value')
+            plt.ylabel('Frequency')
+            plt.grid(alpha=0.3)
+            plt.legend(loc='best')
+            hist_folder = os.path.join(self.pop[0].path_folder, 'SCN_stats')
+            os.makedirs(hist_folder, exist_ok=True)
+            hist_path = os.path.join(hist_folder, f'{cross_mut_str}_SCN{scn_type}_histogram_E{self.exec}.png')
+            plt.savefig(hist_path, dpi=100, bbox_inches='tight')
+            plt.close()
+
+        def get_stats(data=[], scn_type='', percentiles=[5, 10, 25, 50, 75, 90, 95, 99], bins=30):
+            mean = np.mean(data)
+            std = np.std(data)
+            min_val = np.min(data)
+            max_val = np.max(data)
+            median = np.median(data)
+            percentile_values = np.percentile(data, percentiles)
+            frequencies, bin_edges = np.histogram(data, bins=bins)
+            frequency_table = []
+            for i in range(len(frequencies)):
+                frequency_table.append({'bin_min': bin_edges[i],'bin_max': bin_edges[i + 1], 'frequency': frequencies[i]})
+            path_folder = self.pop[0].path_folder
+            path_folder_file = os.path.join(path_folder, 'SCN_stats', f'{cross_mut_str}_SCN{scn_type}_stats.csv')
+            os.makedirs(os.path.dirname(path_folder_file), exist_ok=True)
+            file_exists = os.path.isfile(path_folder_file)
+            with open(path_folder_file, 'a') as f:
+                if not file_exists:
+                    header = 'execution,search_name,distance_type,SCN,INTEGER_ENCODING2,mean,std,min,max,median'
+                    header += ''.join([f',perc_{p}' for p in percentiles])
+                    f.write(header + '\n')
+                row = f'{self.exec},{self.search_name},{self.distance_type},SCN{scn_type},{self.INTEGER_ENCODING2},{mean},{std},{min_val},{max_val},{median}'
+                row += ''.join([f',{value}' for value in percentile_values])
+                f.write(row + '\n')
+            frequency_path = os.path.join(path_folder, 'SCN_stats', f'{cross_mut_str}_SCN{scn_type}_frequencies.csv')
+            frequency_file_exists = os.path.isfile(frequency_path)
+            with open(frequency_path, 'a') as f:
+                if not frequency_file_exists:
+                    f.write('execution,search_name,distance_type,SCN,INTEGER_ENCODING2,bin_min,bin_max,frequency\n')
+                for item in frequency_table:
+                    f.write(f'{self.exec},{self.search_name},{self.distance_type},SCN{scn_type},{self.INTEGER_ENCODING2},{item["bin_min"]},{item["bin_max"]},{item["frequency"]}\n')
+            return {'mean': mean, 'std': std,'min': min_val,'max': max_val,'median': median, 'percentiles': dict(zip(percentiles, percentile_values)), 'frequency_table': frequency_table}
+
+        def get_stats2(data=[], scn_type='', percentiles=[5, 10, 25, 75, 90, 99]):
+            mean = np.mean(data)
+            std = np.std(data)
+            min_val = np.min(data)
+            max_val = np.max(data)
+            median = np.median(data)
+            # Calculate requested percentiles
+            percentile_values = np.percentile(data, percentiles)
+            path_folder = self.pop[0].path_folder
+            path_folder_file = os.path.join(path_folder, 'SCN_stats', f'{cross_mut_str}_SCN{scn_type}_stats.csv')
+            os.makedirs(os.path.dirname(path_folder_file), exist_ok=True)
+            file_exists = os.path.isfile(path_folder_file)
+            with open(path_folder_file, 'a') as f:
+                # Write header only if file is new
+                if not file_exists:
+                    header = ('execution,search_name,distance_type,SCN,INTEGER_ENCODING2,'
+                              'mean,std,min,max,median' )
+                    header += ''.join([f',perc_{p}' for p in percentiles])
+                    f.write(header + '\n')
+                row = (
+                    f'{self.exec},{self.search_name},{self.distance_type},'
+                    f'SCN{scn_type},{self.INTEGER_ENCODING2},'
+                    f'{mean},{std},{min_val},{max_val},{median}'
+                )
+                row += ''.join([f',{value}' for value in percentile_values])
+                f.write(row + '\n')
+            return {'mean': mean, 'std': std, 'min': min_val, 'max': max_val, 'median': median, 'percentiles': dict(zip(percentiles, percentile_values))}
+        percentiles = [5, 10, 25, 75, 90, 95, 99]
+        stats_scn = get_stats(data = self.SCNG_history, scn_type = 'G', percentiles=percentiles) if self.calculate_SCNG else None
+        save_histogram(data = self.SCNG_history, scn_type = 'G', stats=stats_scn) if self.calculate_SCNG else None
+        stats_scn = get_stats(data = self.SCNF_history, scn_type = 'F', percentiles=percentiles) if self.calculate_SCNF else None
+        save_histogram(data = self.SCNF_history, scn_type = 'F', stats=stats_scn) if self.calculate_SCNF else None
+        
+        
+
+    
+    def lognormalize_objectives(self, objective):
+        accuracy, flops, params = objective
+        min_acc = 0.0
+        max_acc = 0.75 if self.representation_type == 'B' else 0.94
+        min_flops = self.MINFLOPS
+        max_flops = self.MAXFLOPS
+        min_params = self.MINPARAMS
+        max_params = self.MAXPARAMS
+        # Accuracy: linear normalization
+        acc_range = max_acc - min_acc if max_acc != min_acc else 1.0
+        normalized_acc = np.clip( (accuracy - min_acc) / acc_range, 0.0, 1.0)
+        # FLOPs: log normalization
+        if min_flops > 0 and max_flops > min_flops:
+            log_min_flops = np.log(min_flops)
+            log_max_flops = np.log(max_flops)
+            normalized_flops = np.clip((np.log(flops) - log_min_flops) / (log_max_flops - log_min_flops), 0.0, 1.0 )
+        else:
+            normalized_flops = 0.0
+        # Parameters: log normalization
+        if min_params > 0 and max_params > min_params:
+            log_min_params = np.log(min_params)
+            log_max_params = np.log(max_params)
+            normalized_params = np.clip((np.log(params) - log_min_params) / (log_max_params - log_min_params),0.0,1.0)
+        else:
+            normalized_params = 0.0
+        return (normalized_acc, normalized_flops, normalized_params)
+
+    def normalize_objectives(self, objective):
+        accuracy, flops, params = objective
+        min_acc = 0.0
+        max_acc = 0.75 if self.representation_type == 'B' else 0.94
+        min_flops = self.MINFLOPS
+        max_flops = self.MAXFLOPS
+        min_params = self.MINPARAMS
+        max_params = self.MAXPARAMS
+        acc_range = max_acc - min_acc if max_acc != min_acc else 1.0
+        flops_range = max_flops - min_flops if max_flops != min_flops else 1.0
+        params_range = max_params - min_params if max_params != min_params else 1.0
+        normalized_acc = np.clip( (accuracy - min_acc) / acc_range, 0.0, 1.0 )
+        normalized_flops = np.clip((flops - min_flops) / flops_range, 0.0,1.0 )
+        normalized_params = np.clip((params - min_params) / params_range, 0.0, 1.0)
+        return (normalized_acc,normalized_flops,normalized_params)
+
+    def save_encoding_vectors_history(self, architecture_set):
+            for arch in architecture_set:
+                vec = self.get_vector_for_distances(arch = arch)
+                self.encoding_vectors_history.add(tuple(vec))
+
+    def save_encoding_vectors_history2(self, architecture_set):
+        for arch in architecture_set:
+            if self.encoding_type == 'BIN':
+                self.encoding_vectors_history.add(tuple(''.join(arch.binary_encoding2_flattened) if self.INTEGER_ENCODING2 else ''.join(arch.binary_encoding)))
+            else:
+                self.encoding_vectors_history.add(tuple(arch.integer_encoding2_flattened if self.INTEGER_ENCODING2 else arch.integer_encoding))
+        print(f'Save encoding vectors history')
+        #print(self.encoding_vectors_history)
+
+    def save_objectives_history(self, architecture_set):
+        for arch in architecture_set:
+            self.objectives_history.add(self.lognormalize_objectives((arch.acc, arch.flops, arch.num_params)))
+
+    def calculate_SCN(self, SCN_G = False, SCN_F = False):
+            s = time.time()
+            N = len(self.pop)
+            color = Fore.GREEN 
+            scnG = None
+            scnF = None
+            labelG = "G" if SCN_G else ""
+            labelF = "F" if SCN_F else ""
+            self.NEXPLOIT_SCNG = 0
+            self.NEXPLORE_SCNG = 0
+            self.NEXPLOIT_SCNF = 0
+            self.NEXPLORE_SCNF = 0
+            print1(f'{color} Calculating SCN_({labelG})({labelF}) for {len(self.pop)} architectures{Fore.RESET} ')
+            for iarch, arch in enumerate(self.pop):
+                if iarch%10 == 0:
+                    print1(f'{color} Calculating SCN_({labelG})({labelF}) for architecture {iarch}/{len(self.pop)}{Fore.RESET}')
+                    print1(f'{color} #GIndividuals:{len(self.encoding_vectors_history)} #FIndividuals:{len(self.objectives_history)}{Fore.RESET}')
+                if SCN_G:
+                    print2(f'Calculate SCNG')
+                    print2(f'{arch.integer_encoding = }')
+                    print2(f'{arch.integer_encoding2_flattened = }')
+                    print2(f'{arch.binary_encoding = }')
+                    print2(f'{arch.binary_encoding2_flattened = }')
+                    print2(f'{arch.real_encoding = }')
+                    print2(f'{arch.real_encoding2_flattened = }')
+                    vec = self.get_vector_for_distances(arch = arch)
+                    num_type = np.int16
+                    num_type = np.float64 if (self.encoding_type == 'REAL') and (self.INTEGER_ENCODING2) else num_type
+                    vec = np.asarray(vec, dtype=num_type)
+                    history = np.asarray(list(self.encoding_vectors_history), dtype=num_type)    
+                    scnG = self.calculate_SCN_G(vec = vec, history = history, distance_type = self.distance_type)
+                    self.SCNG_history.append(scnG)
+                    if scnG <= self.SCNG_THRESHOLD: 
+                        self.NEXPLOIT_SCNG += 1
+                    else:
+                        self.NEXPLORE_SCNG += 1
+                    self.perc_explore_SCNG = self.NEXPLORE_SCNG/N
+                    self.perc_exploit_SCNG = self.NEXPLOIT_SCNG/N
+                if SCN_F:
+                    scnF = self.calculate_SCN_F((arch.acc, arch.flops, arch.num_params))
+                    self.SCNF_history.append(scnF)
+                    if scnF <= self.SCNF_THRESHOLD:
+                        self.NEXPLOIT_SCNF += 1
+                    else:
+                        self.NEXPLORE_SCNF += 1
+                    self.perc_explore_SCNF = self.NEXPLORE_SCNF/N
+                    self.perc_exploit_SCNF = self.NEXPLOIT_SCNF/N
+            print1(f'{color} Calculating SCN_({labelG})({labelF}) complete{Fore.RESET}')
+            f = time.time()
+            print1(f'\n{color} SCN_({labelG})({labelF}) calculation time: {f-s:.2f} seconds{Fore.RESET}')
 
 
-    def calculate_GD(self, archs_list):
+    def calculate_SCN_F2(self, arch_objective = None):
+        #Vectorized form using numpy
+        #Calculate Similariy of Closest Neighbbor of current individual with all individuals through all generations.
+        np_objectives_history = np.array(list(self.objectives_history))
+        np_normalized_arch_objective = np.array(self.lognormalize_objectives(arch_objective))
+        #Delete arch_objective from history if it exists to avoid self-comparison
+        np_objectives_history = np_objectives_history[~np.all(np_objectives_history == np_normalized_arch_objective, axis=1)]
+        dist_vec = np.linalg.norm(np_objectives_history - np_normalized_arch_objective, axis=1)
+        return np.min(dist_vec)
+
+    def calculate_SCN_F(self, arch_objective=None):
+        objective = np.asarray(self.lognormalize_objectives(arch_objective), dtype=np.float64)
+        history = np.asarray(list(self.objectives_history), dtype=np.float64)
+        #history = np.asarray(self.objectives_history, dtype=np.float64)
+        n = len(objective)
+        # Exclude self-comparison
+        history = history[np.any(history != objective, axis=1)]
+        # Calculate Euclidean distances (L2 norm)
+        distances = np.linalg.norm(history - objective, axis=1)
+        return np.min(distances)
+
+    def calculate_SCN_G(self, vec = None, history = None, distance_type='None'):
+        # Exclude self-comparison
+        history = history[np.any(history != vec, axis=1)]
+        print2(f'SCNG function {distance_type = }')
+        print2(vec)
+        print2(history)
+        distances = get_distance(vector=vec, matrix=history, distance_type=distance_type)
+        if distances is None or len(distances) == 0:
+            print1(f'{Fore.RED} Warning: No valid distances calculated for SCN_G. Returning None.{Fore.RESET}')
+            return None
+        return np.min(distances)
+
+    def get_vector_for_distances(self, arch=None):
+        if self.INTEGER_ENCODING2:
+            if self.encoding_type == 'BIN':
+                vec = ''.join(arch.binary_encoding2_flattened)
+            elif self.encoding_type == 'INT':
+                vec = arch.integer_encoding2_flattened
+            elif self.encoding_type == 'REAL':
+                vec = arch.real_encoding2_flattened
+            else:
+                print(f"{Fore.RED} get_vector_for_distances Error: Unsupported encoding type {self.encoding_type}. Returning None.{Fore.RESET}")
+        else:
+            if self.encoding_type == 'BIN':
+                vec = ''.join(arch.binary_encoding)
+            elif self.encoding_type == 'INT':
+                vec = arch.integer_encoding
+            elif self.encoding_type == 'REAL':
+                vec = arch.real_encoding
+            else:
+                print(f"{Fore.RED} get_vector_for_distances Error: Unsupported encoding type {self.encoding_type}. Returning None.{Fore.RESET}")
+        
+        if self.encoding_type == 'BIN':
+            return np.fromiter((int(bit) for bit in vec), dtype=np.int8)
+        return np.asarray(vec)
+
+    def calculate_GD(self, archs_list=None, distance_type='None'):
+        from itertools import combinations
+        if archs_list is None or len(archs_list) < 2:
+            return None
+        add = 0.0
+        N = 0
+        print1(Fore.MAGENTA + f"Calculating GD for {len(archs_list)} architectures...")
+        for a, b in combinations(archs_list, 2):
+            vec_a = self.get_vector_for_distances(arch=a)
+            vec_b = self.get_vector_for_distances(arch=b)
+            distance = get_distance(vector=vec_a, matrix=np.asarray(vec_b).reshape(1, -1), distance_type=distance_type )
+            if distance is None:
+                return None
+            add += distance[0]
+            N += 1
+        print1(Fore.MAGENTA + f"GD calculation complete. Total pairs: {N}")
+        return add / N
+
+    def calculate_GD2(self, archs_list = None, distance_type = 'None'):
         #Calculate the Genotype Distance (GD) of a list of architectures.
         #GD is the mean Hamming distance of all architectures in archs_list.
         from itertools import combinations
@@ -68,11 +368,12 @@ class TECNAS:
         N = 0
         print1(Fore.MAGENTA + f"Calculating GD for {len(archs_list)} architectures...")
         for a, b in combinations(archs_list, 2):
-            add += hamming_distance(a.integer_encoding, b.integer_encoding)
+            #add += hamming_distance(a.integer_encoding, b.integer_encoding)
+            add += get_distance(vectors_list = self.get_vectors_for_distances(arch1 = a, arch2 = b), distance_type = distance_type)
             N += 1
         print1(Fore.MAGENTA + f"GD calculation complete. Total pairs: {N}")
         GD = add/N
-        GD = GD/BLOCKS_CONSTANTS.SIZE_BLOCKGEN if ConfigClass.REPRESENTATION_TYPE == 'B' else GD/LAYERS_CONSTANTS.SIZE_LAYERGEN
+        #GD = GD/BLOCKS_CONSTANTS.SIZE_BLOCKGEN if ConfigClass.REPRESENTATION_TYPE == 'B' else GD/LAYERS_CONSTANTS.SIZE_LAYERGEN
         return GD
 
     def is_strictly_better(self, arch1, arch2):
@@ -86,8 +387,7 @@ class TECNAS:
         self.search_name = ''
         if config_tecnas.HHSE_GREEDY:
             self.search_name += f'GREEDY_{config_tecnas.HHSE_GREEDY_CRITERIA}'
-        elif config_tecnas.HHSE_MARKOV:
-            self.search_name += f'MARKOV_{self.markov_type}'
+        
         elif config_tecnas.HHSE_RANDOM:
             self.search_name += f'HRANDOM'
         elif config_tecnas.HHSE_TEC:
@@ -95,7 +395,12 @@ class TECNAS:
         elif config_tecnas.NSGA2_NORMAL:
             nsga2_window_str = '_W' if config_tecnas.NSGA2_WINDOW else ''
             nsga2_window_size_str = f"{config_tecnas.NSGA2_WINDOW_SIZE_PERC*100:.0f}_" if config_tecnas.NSGA2_WINDOW else ''
-            self.search_name += f'{self.crossover_type}_{self.mutation_type}{nsga2_window_str}{nsga2_window_size_str}'
+            cross_name = f'{self.crossover_type}2' if self.INTEGER_ENCODING2 else self.crossover_type
+            mut_name = f'{self.mutation_type}2' if self.INTEGER_ENCODING2 else self.mutation_type
+            cross_name += f'M{self.HYPER_MUT_PROB*100:.0f}' if self.HYPER_MUTATION else ''
+            mut_name += f'M{self.HYPER_MUT_PROB*100:.0f}' if self.HYPER_MUTATION else ''
+            #hypermut = '_M' if self.HYPER_MUTATION else ''
+            self.search_name += f'{cross_name}_{mut_name}{nsga2_window_str}{nsga2_window_size_str}'
 
     def validate_architecture(self, gen_list):
         # Validates and fixes the mutable CONV/POOL zone (indices 2-5).
@@ -261,7 +566,7 @@ class TECNAS:
 
     def create_arch_from_genlist(self, gen_list = '', create_model = True):
         #Create an architecture from a gen_list
-        arch_obj = LayerRepresentation(genotypeObj=Genotype(gen_list=gen_list)) if ConfigClass.REPRESENTATION_TYPE == 'L' else BlockRepresentation(genotypeObj=Genotype(gen_list=gen_list))
+        arch_obj = LayerRepresentation(genotypeObj=Genotype(gen_list=gen_list)) if ConfigClass.REPRESENTATION_TYPE == 'L' else BlockRepresentation(genotypeObj=Genotype(gen_list=gen_list), INTEGER_ENCODING2 = self.INTEGER_ENCODING2)
         arch_obj.model = self.create_model(arch_obj) if create_model else None
         return arch_obj
 
@@ -313,287 +618,11 @@ class TECNAS:
         lower_median_idx = (n - 1) // 2
         return lower_median_idx
 
-# ================================================================================= MARKOV===================================================================
-
-    def markov_aggregate_matrix(self):
-        import os
-        import csv
-
-        matrix_folder = os.path.join(self.pop[0].path_folder, "matrix")
-
-        # Find all count matrix files
-        files = [f for f in os.listdir(matrix_folder) if "count_matrix" in f and f.endswith(".csv")]
-
-        if not files:
-            raise ValueError("No count_matrix CSV files found in the folder.")
-
-        aggregated_counts = None
-        states = None
-
-        # -------- Aggregate matrices --------
-        for file in files:
-
-            file_path = os.path.join(matrix_folder, file)
-
-            with open(file_path, mode="r", newline="", encoding="utf-8") as f:
-
-                reader = csv.reader(f)
-                header = next(reader)
-                current_states = header[1:]
-
-                if aggregated_counts is None:
-
-                    states = current_states
-                    n = len(states)
-                    aggregated_counts = [[0]*n for _ in range(n)]
-
-                if current_states != states:
-                    raise ValueError(f"State mismatch in file {file}")
-
-                for i, row in enumerate(reader):
-
-                    counts_row = list(map(int, row[1:]))
-
-                    for j in range(len(counts_row)):
-                        aggregated_counts[i][j] += counts_row[j]
-
-        # -------- Remove zero rows --------
-        row_sums = [sum(row) for row in aggregated_counts]
-
-        valid_indices = [i for i, s in enumerate(row_sums) if s > 0]
-
-        if not valid_indices:
-            return [], [], []
-
-        states = [states[i] for i in valid_indices]
-
-        filtered_counts = []
-
-        for i in valid_indices:
-            filtered_row = [aggregated_counts[i][j] for j in valid_indices]
-            filtered_counts.append(filtered_row)
-
-        aggregated_counts = filtered_counts
-        n = len(states)
-
-        # -------- Build stochastic matrix --------
-        P = []
-
-        for row in aggregated_counts:
-
-            total = sum(row)
-
-            if total == 0:
-                P.append([0]*n)
-            else:
-                P.append([value/total for value in row])
-
-        # -------- Save COUNT matrix --------
-
-        counts_file = os.path.join(
-            matrix_folder,
-            f"counts_{config_tecnas.REPRESENTATION_TYPE}{config_tecnas.ENCODING_TYPE}_"
-            f"{config_tecnas.HHSE_GREEDY_CRITERIA}_Seed{config_tecnas.INITIAL_SEED}.csv"
-        )
-
-        with open(counts_file, mode="w", newline="", encoding="utf-8") as f:
-
-            writer = csv.writer(f)
-
-            writer.writerow(["counts"] + states)
-
-            for i, row in enumerate(aggregated_counts):
-                writer.writerow([states[i]] + row)
-
-        # -------- Save stochastic matrix --------
-
-        prob_file = os.path.join(
-            matrix_folder,
-            f"matrix_{config_tecnas.REPRESENTATION_TYPE}{config_tecnas.ENCODING_TYPE}_"
-            f"{config_tecnas.HHSE_GREEDY_CRITERIA}_Seed{config_tecnas.INITIAL_SEED}.csv"
-        )
-
-        with open(prob_file, mode="w", newline="", encoding="utf-8") as f:
-
-            writer = csv.writer(f)
-
-            writer.writerow([f"{config_tecnas.HHSE_GREEDY_CRITERIA}"] + states)
-
-            for i, row in enumerate(P):
-                writer.writerow([states[i]] + [f"{p:.6f}" for p in row])
-
-        return states, aggregated_counts, P
-
-    
-    def markov_barplot_mean_stationary_probabilities(self):
-        if config_tecnas.HHSE_GREEDY == False:
-            return
-        #Read the mean stationary probabilities from the CSV file and create a bar plot.
-        report_folder = os.path.join(self.pop[0].path_folder, "matrix")
-        mean_prob_file = os.path.join(report_folder, f"mean_stationary_probabilities.csv")
-        if not os.path.exists(mean_prob_file):
-            print(Fore.LIGHTRED_EX + "Mean stationary probabilities file not found.")
-            return
-
-        go_names = []
-        mean_probs = []
-        with open(mean_prob_file, "r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                go_names.append(row["GO_Name"])
-                mean_probs.append(float(row["Mean_Stationary_Probability"]))
-
-        plt.figure(figsize=(10, 6))
-        plt.bar(go_names, mean_probs, color='skyblue')
-        plt.xlabel('Genetic Operators')
-        plt.ylabel('Mean Stationary Probability')
-        plt.title(f'Mean Stationary Probabilities of GOs - {config_tecnas.HHSE_GREEDY_CRITERIA} Selection')
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-        plot_file = os.path.join(report_folder, f"mean_stationary_probabilities.png")
-        plt.savefig(plot_file)
-        plt.close()
-        print(Fore.GREEN + f'Mean stationary probabilities bar plot saved to {plot_file}')
-
-    def markov_mean_stationary_probabilities(self):
-        if config_tecnas.HHSE_GREEDY == False:
-            return
-        #Calculate the mean stationary probabilities for each GO across all generations and save them to a CSV file.
-        report_folder = os.path.join(self.pop[0].path_folder, "matrix")
-        os.makedirs(report_folder, exist_ok=True)
-        # Read all stationary distribution files in the matrix folder
-        stationary_files = [f for f in os.listdir(report_folder) if f.startswith("stationary_distribution_")]
-        if not stationary_files:
-            print(Fore.LIGHTRED_EX + "No stationary distribution files found.")
-            return
-
-        # Initialize a dictionary to store mean stationary probabilities for each GO
-        mean_stationary_probs = {}
-        # Initialize a list to store all probabilities for each GO
-        all_probs = {}
-
-        for filename in stationary_files:
-            file_path = os.path.join(report_folder, filename)
-            with open(file_path, "r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    go_name = row["State"]
-                    prob = float(row["Stationary_Probability"])
-                    if go_name not in mean_stationary_probs:
-                        mean_stationary_probs[go_name] = 0
-                        all_probs[go_name] = []
-                    mean_stationary_probs[go_name] += prob
-                    all_probs[go_name].append(prob)
-
-        # Calculate the mean of stationary probabilities for each GO
-        num_files = len(stationary_files)
-        for go_name in mean_stationary_probs:
-            mean_stationary_probs[go_name] /= num_files
-
-        # Write the mean stationary probabilities to a new CSV file
-        output_file = os.path.join(report_folder, f"mean_stationary_probabilities.csv")
-        with open(output_file, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["GO_Name", "Mean_Stationary_Probability"])
-            for go_name, mean_prob in mean_stationary_probs.items():
-                writer.writerow([go_name, f"{mean_prob:.6f}"])
-
-    def markov_matrix(self, transitions=None, iterations=1000, tolerance=1e-10):
-        if config_tecnas.HHSE_GREEDY == False:
-            return
-
-        matrix_folder = os.path.join(self.pop[0].path_folder, "matrix")
-        ensure_folder_exists(matrix_folder)
-
-        # --- include ALL possible states ---
-        # STATES is assumed to be a global or imported list
-        all_states = sorted(set(self.GOs_names))
-        observed_states = set(transitions)
-
-        # Index mapping for each state (ALL states included)
-        index = {state: i for i, state in enumerate(all_states)}
-
-        n = len(all_states)
-
-        # Count matrix initialization
-        counts = [[0] * n for _ in range(n)]
-
-        # Count transitions ONLY for observed ones
-        for i in range(len(transitions) - 1):
-            current_state = transitions[i]
-            next_state = transitions[i + 1]
-            if current_state in index and next_state in index:
-                counts[index[current_state]][index[next_state]] += 1
-
-        # Transition probability matrix
-        P = []
-        for row in counts:
-            total = sum(row)
-            if total == 0:
-                P.append([0] * n)
-            else:
-                P.append([value / total for value in row])
-
-        # --- stationary distribution ONLY over observed states ---
-        active_indices = [index[s] for s in all_states if s in observed_states]
-
-        # initialize pi only on active states
-        m = len(active_indices)
-        pi = [0.0] * n
-        if m > 0:
-            for i in active_indices:
-                pi[i] = 1.0 / m
-
-            # power method restricted to active states
-            for _ in range(iterations):
-                new_pi = [0.0] * n
-                for j in active_indices:
-                    for i in active_indices:
-                        new_pi[j] += pi[i] * P[i][j]
-
-                # convergence check only on active states
-                if max(abs(new_pi[i] - pi[i]) for i in active_indices) < tolerance:
-                    pi = new_pi
-                    break
-                pi = new_pi
-
-        # states not observed keep probability 0 automatically
-
-        # Sort states by stationary probability (descending)
-        ranking = sorted(zip(all_states, pi), key=lambda x: x[1], reverse=True)
-
-        # File paths
-        matrix_output_file = os.path.join(matrix_folder, f"markov_matrix_{self.exec}.csv")
-        stationary_output_file = os.path.join(matrix_folder, f"stationary_distribution_{self.exec}.csv")
-        counts_output_file = os.path.join(matrix_folder, f"count_matrix_{self.exec}.csv")
-
-        # Write transition probability matrix to CSV (optional, still available)
-        # with open(matrix_output_file, mode="w", newline="", encoding="utf-8") as f:
-        #     writer = csv.writer(f)
-        #     writer.writerow(["State"] + all_states)
-        #     for i, row in enumerate(P):
-        #         writer.writerow([all_states[i]] + [f"{p:.6f}" for p in row])
-
-        # Write stationary distribution to CSV
-        with open(stationary_output_file, mode="w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["State", "Stationary_Probability"])
-            for state, prob in ranking:
-                writer.writerow([state, f"{prob:.6f}"])
-
-        # Write count matrix to CSV
-        with open(counts_output_file, mode="w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["State"] + all_states)
-            for i, row in enumerate(counts):
-                writer.writerow([all_states[i]] + row)
-
-        return all_states, P, pi, ranking
 
     def selection(self, pop = None):
         print2('\nSelecting best parents and children for the new population')
         #Based on the SORT_ARCHS variable, select the best architectures from the sorted pool.
-        if config_tecnas.NSGA2 == False:
+        if self.NSGA2 == False:
             if ConfigClass.SORT_ARCHS == 'SUPERIOR':
                 begin = 0
                 end = self.NPOP
@@ -608,10 +637,9 @@ class TECNAS:
                 print(f'ERROR: {ConfigClass.SORT_ARCHS} is not a valid sorting method')
             pop = self.sorted_pool[begin:end]
         else: #Use NSGA-II selection
-            print('Selecting architectures with NSGA-II')
             self.nsga2_obj = TECNAS_NSGAII(pop = self.pool, pop_size = self.NPOP, tecnasObj = self)
-            pop, self.HV = self.nsga2_obj.select_and_HV(self.pool)
-            #self.HV = random.randint(1,30) #REMOVE THIS, IT IS JUST TO TEST THE GREEDY COMBINED SELECTION
+            pop, self.HV, self.riesz_energy = self.nsga2_obj.select_and_HV(self.pool)
+            
             if self.generation == 1:
                 self.dHV = 0
             else:
@@ -628,7 +656,7 @@ class TECNAS:
         def determine_GOs(self, GO_SELECTED = False, GO_SELECTED_NAME = ''):
             #Use best SELECTED identified GOs for each stage (CROSS, MUT, HD, DHV) for GREEDY_COMBINED. set_GREEDY_GOs_list returns 4 lists with all GOs (SPC_MPAR, TPC_MTYP, etc)
             #GO_SELECTED: CROSS_SELECTED, MUT_SELECTED, etc.
-            GOs_CROSS, GOs_MUT, GOs_HV, GOs_GD = config_tecnas.set_GREEDY_GOs_list(config_tecnas.REPRESENTATION_TYPE, config_tecnas.ENCODING_TYPE)
+            GOs_CROSS, GOs_MUT, GOs_HV, GOs_GD = config_tecnas.set_GREEDY_GOs_list(self.representation_type, self.encoding_type)
             GOs_dict = {'CROSS': GOs_CROSS, 'MUT': GOs_MUT, 'HV': GOs_HV, 'GD': GOs_GD}
             if GO_SELECTED:
                 return GOs_dict[GO_SELECTED_NAME]
@@ -653,7 +681,7 @@ class TECNAS:
                 while cross_mut_str == 'NONE_NONE' and config_tecnas.IGNORE_RANDOM:
                     cross_mut_str = f'{random.choice(config_tecnas.crossoverList_hhse)}_{random.choice(config_tecnas.mutationList_hhse)}'
                 return cross_mut_str
-            GOs_CROSS, GOs_MUT, GOs_HV, GOs_GD = config_tecnas.set_GREEDY_FIXED_GOs_list(config_tecnas.REPRESENTATION_TYPE, config_tecnas.ENCODING_TYPE)
+            GOs_CROSS, GOs_MUT, GOs_HV, GOs_GD = config_tecnas.set_GREEDY_FIXED_GOs_list(self.representation_type, self.encoding_type)
             GOs_dict = {'CROSS': GOs_CROSS, 'MUT': GOs_MUT, 'HV': GOs_HV, 'GD': GOs_GD}
             return GOs_dict[config_tecnas.HHSE_GREEDY_CRITERIA][0]
         #Apply all genetic operators. Save them as a list of objects.
@@ -681,7 +709,7 @@ class TECNAS:
             self.sorted_pool = sorted(self.pool, key=lambda obj: obj.acc, reverse = True) #Best archs first
             print2('Applying all genetic operators in course. Selecting next generation')
             self.GOs_population_dict[cross_mut_str] = copy.deepcopy(self.selection(pop = self.pool))
-            self.GD = self.calculate_GD(self.GOs_population_dict[cross_mut_str]) if config_tecnas.HHSE_GREEDY_FIXED else 0
+            self.GD = self.calculate_GD(archs_list = self.GOs_population_dict[cross_mut_str], distance_type = self.distance_type) if config_tecnas.HHSE_GREEDY_FIXED else 0
             print2('Selection of next generation complete\n')
             #self.GOs_HV[cross_mut_str] = [HV_actual, HV_prev, dHV]
             self.GOs_HV[cross_mut_str][2] = 0 if self.generation == 1 else self.HV - self.GOs_HV[cross_mut_str][0] #Calculate dHV
@@ -756,11 +784,11 @@ class TECNAS:
                 #Copy the parents to the children in case of only mutation. (Mutation only works with children and they are generated in the crossover function)
                 print2(Fore.RED + 'No Crossover operation selected. Copying parents to children')
                 self.children = []
-            for arch in self.pop:
-                child = copy.deepcopy(arch)
-                child = self.make_child(child, arch, arch)
-                self.children.append(child) #Make a child of itself. This is to keep the same structure as the crossover function. Parents are itself
-                print2(Fore.RED + 'Copying parents to children complete\n')
+                for arch in self.pop:
+                    child = copy.deepcopy(arch)
+                    child = self.make_child(child, arch, arch, distance_type = self.distance_type)
+                    self.children.append(child) #Make a child of itself. This is to keep the same structure as the crossover function. Parents are itself
+                    print2(Fore.RED + 'Copying parents to children complete\n')
             #================================================= MUTATION ==========================================================================================
             if self.mutation_type != 'NONE': 
                 print2(Fore.GREEN + '\nMutating offspring')
@@ -819,7 +847,7 @@ class TECNAS:
         self.validation_generator = self.validation_datagen.flow(self.x_val, self.y_val, batch_size=Globals.BATCH_SIZE)
 
 
-    def make_child(self, child, parent1, parent2):
+    def make_child(self, child=None, parent1=None, parent2=None, distance_type='None'):
         child.isChild = True
         child.isMutant = False
         child.P1Idx = parent1.idx
@@ -828,12 +856,18 @@ class TECNAS:
         child.P2IntegerEncoding = parent2.integer_encoding
         child.before_mutationIdx = ''
         child.before_mutationIntegerEndcoding = None
-        child.integer_encoding = child.genList_to_integer_vector()
-        child.set_genoStr()
-        child.dP1 = hamming_distance(child.integer_encoding, parent1.integer_encoding)/len(child.integer_encoding)
-        child.dP2 = hamming_distance(child.integer_encoding, parent2.integer_encoding)/len(child.integer_encoding)
+        print2(f"\nmake_child function:\n{child.integer_encoding = }\n{parent1.integer_encoding = }\n{parent2.integer_encoding = }\n")
+        # Get the appropriate integer encodings
+        vec_child = self.get_vector_for_distances(arch=child)
+        vec_parent1 = self.get_vector_for_distances(arch=parent1)
+        vec_parent2 = self.get_vector_for_distances(arch=parent2)
+        # Calculate distances
+        distance_p1 = get_distance(vector=vec_child, matrix=np.asarray(vec_parent1).reshape(1, -1), distance_type=distance_type)
+        distance_p2 = get_distance(vector=vec_child, matrix=np.asarray(vec_parent2).reshape(1, -1), distance_type=distance_type)
+        child.dP1 = distance_p1[0] if distance_p1 is not None else None
+        child.dP2 = distance_p2[0] if distance_p2 is not None else None
+        print2('Distance calculation done')
         child.dBM = 0
-
         child.P1acc = parent1.acc
         child.P2acc = parent2.acc
         child.P1flops = parent1.flops
@@ -842,10 +876,9 @@ class TECNAS:
         child.P2params = parent2.num_params
         return child
 
-    def make_mutant(self, archM, archOriginal):
+    def make_mutant(self, archM=None, archOriginal=None, distance_type='None'):
         archM.isChild = True
         archM.isMutant = True
-
         archM.P1Idx = archOriginal.P1Idx
         archM.P2Idx = archOriginal.P2Idx
         archM.P1IntegerEncoding = archOriginal.P1IntegerEncoding
@@ -856,15 +889,21 @@ class TECNAS:
         archM.dP1 = archOriginal.dP1
         archM.dP2 = archOriginal.dP2
         archM.BMacc = archOriginal.acc
-        archM.dBM = hamming_distance(archM.integer_encoding, archOriginal.integer_encoding)/len(archM.integer_encoding)
+        print2(f"\nmake_mutant function:\n{archM.integer_encoding = }\n{archOriginal.integer_encoding = }\n")
+        # Get the appropriate integer encodings
+        vec_mutant = self.get_vector_for_distances(arch=archM)
+        vec_original = self.get_vector_for_distances(arch=archOriginal)
+        # Calculate distance
+        distance = get_distance(vector=vec_mutant, matrix=np.asarray(vec_original).reshape(1, -1), distance_type=distance_type)
+        archM.dBM = distance[0] if distance is not None else None
         archM.P1acc = archOriginal.P1acc
         archM.P2acc = archOriginal.P2acc
         archM.P1flops = archOriginal.P1flops
         archM.P2flops = archOriginal.P2flops
         archM.P1params = archOriginal.P1params
         archM.P2params = archOriginal.P2params
-
         archM.set_genoStr()
+
         return archM
 
     def make_parent(self, arch):
@@ -885,50 +924,48 @@ class TECNAS:
         '''
         return arch
 
-    
-    
-    def change_block(self, child, mutation_type):
+    def change_block(self, original_arch = None,  mutation_type = None, INTEGER_ENCODING2 = False):
         mutator_obj = Mutator()
-        arch = BlockRepresentation(genotypeObj = None)
-        arch.genotype = copy.deepcopy(child.genotype)
-        mutable_block_indexes = BLOCKS_CONSTANTS.MUTABLE_BCHANGEPARAM_INDEXES
-        
-        if mutation_type == 'MBFLIP': #This is done separately because it works differently than the other mutations.
-            arch.binary_encoding = mutator_obj.mutate_bitflip(child.binary_encoding, self.MAXINT)
-            arch.binary_encoding_to_integer_encoding()
-            arch.genotype.gen_list = arch.integer_vector_to_genList(arch.integer_encoding)
-            arch.set_genotype(arch.genotype)
-            return arch
-        if mutation_type == 'MPOLY': #This one too, works differently.
-            mpoly_indexes = range(len(BlockRepresentation().all_blocks)) #0 1 2 3... 63
-            arch.real_encoding = mutator_obj.polynomial_mutation(arch_obj = child, t = self.generation, ylow = min(mpoly_indexes), yhigh = max(mpoly_indexes))
-            arch.real_encoding_to_integer_encoding()
-            arch.genotype.gen_list = arch.integer_vector_to_genList(arch.integer_encoding)
-            arch.set_genotype(arch.genotype)
-            return arch
-        
-        if mutation_type == 'MNUF': #This one too, works differently.
-            mnounf_indexes = range(len(BlockRepresentation().all_blocks)) #0 1 2 3... 63
-            arch.real_encoding = mutator_obj.nouniform_mutation(arch_obj = child, t = self.generation, ylow = min(mnounf_indexes), yhigh = max(mnounf_indexes))
-            arch.real_encoding_to_integer_encoding()
-            arch.genotype.gen_list = arch.integer_vector_to_genList(arch.integer_encoding)
-            arch.set_genotype(arch.genotype)
-            return arch
-
-        if mutation_type == 'MPAR':
-            mutation_function = mutator_obj.mutate_block_parameters
+        arch = copy.deepcopy(original_arch)
+        real_vector = None
+        print2(f'change block function before mutation: {arch.integer_encoding = }')
+        mutable_block_indexes = list(range(len(arch.integer_encoding))) if self.INTEGER_ENCODING2 else BLOCKS_CONSTANTS.MUTABLE_BCHANGEPARAM_INDEXES
+        if mutation_type == 'MBFLIP':
+            vec_bin = arch.binary_encoding2_flattened if INTEGER_ENCODING2 else arch.binary_encoding 
+            vec_bin = mutator_obj.mutate_bitflip(binary_encoding = vec_bin, MAX_INT = len(BlockRepresentation.all_blocks)-1, INTEGER_ENCODING2 = INTEGER_ENCODING2, MUT_PROB = self.MUT_PROB)
+            vec_int = BlockRepresentation.binary_encoding_to_integer_encoding(binary_encoding = vec_bin)
+            vec_int = BlockRepresentation.flattened_integer_encoding2_to_integer_encoding(vec_int) if INTEGER_ENCODING2 else vec_int
+        elif mutation_type == 'MPAR': 
+            vec_int = arch.integer_encoding2_flattened if INTEGER_ENCODING2 else arch.integer_encoding
+            vec_int = mutator_obj.mutate_block_parameters(vec_int = vec_int, INTEGER_ENCODING2 = INTEGER_ENCODING2, MUT_PROB = self.MUT_PROB)
+            vec_int = BlockRepresentation.flattened_integer_encoding2_to_integer_encoding(vec_int) if INTEGER_ENCODING2 else vec_int
         elif mutation_type == 'MSWAP':
-            mutation_function = mutator_obj.mutate_block_swap
-       
+            vec_int = arch.integer_encoding2_flattened if INTEGER_ENCODING2 else arch.integer_encoding
+            vec_int = mutator_obj.mutate_block_swap(vec_int = vec_int, INTEGER_ENCODING2 = INTEGER_ENCODING2, MUT_PROB = self.MUT_PROB)
+            vec_int = BlockRepresentation.flattened_integer_encoding2_to_integer_encoding(vec_int) if INTEGER_ENCODING2 else vec_int
+        elif mutation_type == 'MPOLY':
+            mpoly_indexes = range(len(BlockRepresentation().all_blocks)) #0 1 2 3... 63 polynomial_mutation function deals with max and min for integer_encoding2.
+            vreal = arch.real_encoding2_flattened if INTEGER_ENCODING2 else arch.real_encoding 
+            real_vector = mutator_obj.polynomial_mutation(vreal = vreal, t = self.generation, ylow = min(mpoly_indexes), yhigh = max(mpoly_indexes), INTEGER_ENCODING2 = INTEGER_ENCODING2, MUT_PROB = self.MUT_PROB)
+            vec_int = BlockRepresentation.flattened_real_encoding2_to_integer_encoding(real_vector) if INTEGER_ENCODING2 else BlockRepresentation.real_encoding_to_integer_encoding(real_vector)
+        elif mutation_type == 'MNUF':
+            mnounf_indexes = range(len(BlockRepresentation().all_blocks)) #0 1 2 3... 63 nouniform_mutation function deals with max and min for integer_encoding2.
+            vreal = arch.real_encoding2_flattened  if INTEGER_ENCODING2 else arch.real_encoding 
+            real_vector = mutator_obj.nouniform_mutation(vreal = vreal, t = self.generation, ylow = min(mnounf_indexes), yhigh = max(mnounf_indexes), INTEGER_ENCODING2 = INTEGER_ENCODING2, MUT_PROB = self.MUT_PROB)
+            vec_int = BlockRepresentation.flattened_real_encoding2_to_integer_encoding(real_vector) if INTEGER_ENCODING2 else BlockRepresentation.real_encoding_to_integer_encoding(real_vector)
         else:
-            print(f'ERROR: {mutation_type} Mutation type not recognized for {config_tecnas.REPRESENTATION_TYPE}{config_tecnas.ENCODING_TYPE}')
-            mutation_function = None
-            
-        for block_idx in mutable_block_indexes:
-            if random.random() < self.MUT_PROB:
-                arch.genotype.gen_list = mutation_function(arch.genotype, block_idx)
-                arch.set_genotype(arch.genotype)
+            print(f'ERROR: {mutation_type} Mutation type not recognized for {self.representation_type}{self.encoding_type}')
+            return None
+
+        arch.genotype.gen_list = arch.integer_vector_to_genList(vec_int)
+        arch.genotype.gen_list = BlockRepresentation.update_genlist(arch.genotype.gen_list)
+        arch.integer_encoding, arch.integer_encoding2, arch.integer_encoding2_flattened, arch.real_encoding, arch.real_encoding2, arch.real_encoding2_flattened, arch.binary_encoding, arch.binary_encoding2_flattened = BlockRepresentation.update_vector_encodings(int_vec = vec_int, INTEGER_ENCODING2 = self.INTEGER_ENCODING2, binary_encoding = True if self.encoding_type == 'BIN' else False)
+        arch.set_genotype(arch.genotype)
+        print2(f'change block function after mutation: {arch.integer_encoding = }')
         return arch
+
+        
+    
 
     def mutate_layer(self, child, mutation_type):
         #gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':2}, {'CONV':[64,3]}, {'POOLMAX':2}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
@@ -947,7 +984,7 @@ class TECNAS:
                 layers_indexes = LAYERS_CONSTANTS.MUTABLE_LSWAP_INDEXES #Only this indexes may change type
                 mutation_function = mutator_obj.mutate_layer_swap
             else:
-                print(Fore.RED + f'ERROR: {mutation_type} Mutation type not recognized for {config_tecnas.REPRESENTATION_TYPE}{config_tecnas.ENCODING_TYPE}' + Fore.RESET)
+                print(Fore.RED + f'ERROR: {mutation_type} Mutation type not recognized for {self.representation_type}{self.encoding_type}' + Fore.RESET)
                 return None
             for layer_idx in layers_indexes:
                 if random.random() < self.MUT_PROB:
@@ -962,7 +999,7 @@ class TECNAS:
                 archMut.genotype.gen_list = archMut.integer_vector_to_genList(archMut.integer_encoding)
                 archMut.set_genotype(archMut.genotype)
             else:
-                print(Fore.RED + f'ERROR: {mutation_type} Mutation type not recognized for {config_tecnas.REPRESENTATION_TYPE}{config_tecnas.ENCODING_TYPE}' + Fore.RESET)
+                print(Fore.RED + f'ERROR: {mutation_type} Mutation type not recognized for {self.representation_type}{self.encoding_type}' + Fore.RESET)
                 return None
 
         return archMut
@@ -980,7 +1017,7 @@ class TECNAS:
                 mutated_child.set_genoStr()
                 
             elif ConfigClass.REPRESENTATION_TYPE == 'B':
-                mutated_child = self.change_block(self.children[i], mutation_type)
+                mutated_child = self.change_block(original_arch = self.children[i], mutation_type = mutation_type, INTEGER_ENCODING2 = self.INTEGER_ENCODING2)
 
             else:
                 print(Fore.LIGHTRED_EX + f'ERROR (mutate_children): {self.representation_type} Representation type not recognized' + Fore.RESET)
@@ -988,38 +1025,61 @@ class TECNAS:
             print2(Fore.GREEN + f'MUTATING {self.children[i].idx} with {mutation_type} mutation complete\n')
             self.total_mut += 1
             mutated_child.idx = str(name_before_mut) + '[M]' #Add M to the index to indicate it was mutated      
-            mutated_child = self.make_mutant(mutated_child, self.children[i])
+            mutated_child = self.make_mutant(mutated_child, self.children[i], distance_type = self.distance_type)
             mutated_child = self.train_model(mutated_child)
             print2('Assesing if the mutation was succesful')
             #self.succ_mut += 1 if mutated_child.acc > self.children[i].acc else 0
             self.succ_mut += 1 if self.is_strictly_better(mutated_child, self.children[i]) else 0
             print2('Assesing if the mutation was succesful completed')
             self.children[i] = mutated_child
-           
-    def crossover(self, arch_obj1, arch_obj2):
-        #     0                 1                  2                     3                      4                  5                    6              7                      8                   9               10
-        #[{'INP': 32}, {'CONV': [128, 5]}, {'CONV': [128, 5]}, {'POOLMAX': [-1, 3]}, {'CONV': [64, 3]}, {'CONV': [256, 5]}, {'POOLMAX': [-1, 2]}, {'FLATTEN': None}, {'DENSE': [512, 'relu']}, {'LAST_DENSE': [10, 'softmax']}]
-        #[5, 5, 9, 2, 7, 8, 12]
-        #[C, C, P, C, C, P, D]
+
+    def crossover(self, arch_obj1 = None, arch_obj2 = None):
+        #For integer_encoding2, remember that arch_integer_encoding looks like [0,1,0,3,0,1] but crossover works with [(0,1),(0,3),(0,1)] and returns the same format.
         crossover_obj = Crossover()
-        #Check what kind of crossover is being used
+        if self.INTEGER_ENCODING2: #Crossover works with [(0,1),(0,3),(0,1)] except SBX.
+            v1 = arch_obj1.binary_encoding2_flattened if self.encoding_type == 'BIN' else arch_obj1.integer_encoding2
+            v2 = arch_obj2.binary_encoding2_flattened if self.encoding_type == 'BIN' else arch_obj2.integer_encoding2
+        else:
+            v1 = arch_obj1.binary_encoding if self.encoding_type == 'BIN' else arch_obj1.integer_encoding
+            v2 = arch_obj2.binary_encoding if self.encoding_type == 'BIN' else arch_obj2.integer_encoding
+
         if self.crossover_type == 'SPC':
-            point = random.choice(TECNAS.REP_CONSTANTS.SPC_INDEXES)
-            gen_list_child1, gen_list_child2, idx1, idx2 = crossover_obj.single_point_crossover(arch_obj1, arch_obj2, point)
+            point = random.choice(range(len(v1))) if self.encoding_type == 'BIN' else random.choice(TECNAS.REP_CONSTANTS.SPC_INDEXES)
+            child1_vec, child2_vec = crossover_obj.single_point_crossover(v1 = v1, v2 = v2, point = point)
         elif self.crossover_type == 'TPC':
-            [point1, point2] = random.sample(TECNAS.REP_CONSTANTS.SPC_INDEXES, 2)
-            gen_list_child1, gen_list_child2, idx1, idx2 = crossover_obj.two_point_crossover(arch_obj1, arch_obj2, point1, point2)
+            [point1, point2] = random.sample(range(len(v1)), 2) if self.encoding_type == 'BIN' else random.sample(TECNAS.REP_CONSTANTS.SPC_INDEXES, 2)
+            child1_vec, child2_vec = crossover_obj.two_point_crossover(v1 = v1, v2 = v2, point1 = point1, point2 = point2)
         elif self.crossover_type == 'UC':
-            gen_list_child1, gen_list_child2, idx1, idx2 = crossover_obj.uniform_crossover(arch_obj1, arch_obj2, crossover_indexes = TECNAS.REP_CONSTANTS.SPC_INDEXES)
+            child1_vec, child2_vec = crossover_obj.uniform_crossover(v1 = v1, v2 = v2, crossover_indexes = range(len(v1)) if self.encoding_type == 'BIN' else TECNAS.REP_CONSTANTS.SPC_INDEXES)
         elif self.crossover_type == 'SBX':
-            gen_list_child1, gen_list_child2, idx1, idx2, real_encoding_child1, real_encoding_child2 = crossover_obj.SBX(arch_obj1 = arch_obj1, arch_obj2 = arch_obj2, eta_c = 2.0, min_int = 0, max_int = 63)
-            return crossover_obj.create_children(gen_list_child1 = gen_list_child1, gen_list_child2 = gen_list_child2, arch_obj1_idx = idx1, arch_obj2_idx = idx2, 
-                                                 real_encoding_child1 = real_encoding_child1, real_encoding_child2 = real_encoding_child2)
+                #INTEGER_ENCODING2 is dealt inside SBX. Specifically for min and max ints.
+                child1_vecReal = arch_obj1.real_encoding2_flattened if self.INTEGER_ENCODING2 else arch_obj1.real_encoding
+                child2_vecReal = arch_obj2.real_encoding2_flattened if self.INTEGER_ENCODING2 else arch_obj2.real_encoding
+                child1_vecReal, child2_vecReal = crossover_obj.SBX(v1_real = child1_vecReal, v2_real = child2_vecReal, eta_c = 2.0, min_int = 0, max_int = 63, INTEGER_ENCODING2 = self.INTEGER_ENCODING2)
+                #Check if INTEGER_ENCODING2 is True. If it is, go from flatened_real encoding to integer_encoding.
+                child1_vec = BlockRepresentation.flattened_real_encoding2_to_integer_encoding2(child1_vecReal) if self.INTEGER_ENCODING2 else BlockRepresentation.real_encoding_to_integer_encoding(child1_vecReal)
+                child2_vec = BlockRepresentation.flattened_real_encoding2_to_integer_encoding2(child2_vecReal) if self.INTEGER_ENCODING2 else BlockRepresentation.real_encoding_to_integer_encoding(child2_vecReal)
         else:
             print(f'UNRECOGNIZED CROSSOVER METHOD {self.crossover_type}')
             return None, None
-        return crossover_obj.create_children(gen_list_child1 = gen_list_child1, gen_list_child2 = gen_list_child2, arch_obj1_idx = idx1, arch_obj2_idx = idx2)
-        
+
+        if self.encoding_type == 'BIN':
+            #print(f'tecnas crossover \nv1 = {v1}\nv2 = {v2}\n')
+            #print(f'child1_vec = {child1_vec}\nchild2_vec = {child2_vec}\n')
+            #print(f'arch_obj1.int = {arch_obj1.integer_encoding}\narch_obj2.int = {arch_obj2.integer_encoding}\n')
+            child1_vec = BlockRepresentation.binary_encoding_to_integer_encoding(binary_encoding = child1_vec)
+            child2_vec = BlockRepresentation.binary_encoding_to_integer_encoding(binary_encoding = child2_vec)
+            child1_vec = BlockRepresentation.flattened_to_tuples(child1_vec) if self.INTEGER_ENCODING2 else child1_vec
+            child2_vec = BlockRepresentation.flattened_to_tuples(child2_vec) if self.INTEGER_ENCODING2 else child2_vec
+            #print(f'tecnas crossover \nchild1_vec = {child1_vec}\nchild2_vec = {child2_vec}')
+
+        child1_intvec = BlockRepresentation.integer_encoding2_to_integer_encoding(child1_vec) if self.INTEGER_ENCODING2 else child1_vec
+        child2_intvec = BlockRepresentation.integer_encoding2_to_integer_encoding(child2_vec) if self.INTEGER_ENCODING2 else child2_vec
+
+        child1_arch = self.vector_to_arch(intvec = child1_intvec, arch_obj1_idx = arch_obj1.idx, arch_obj2_idx = arch_obj2.idx, is_first_child = True)
+        child2_arch = self.vector_to_arch(intvec = child2_intvec, arch_obj1_idx = arch_obj1.idx, arch_obj2_idx = arch_obj2.idx, is_first_child = False)    
+        return child1_arch, child2_arch
+            
 
     def random_parent_selection(self):
         [p1, p2] = random.sample(self.pop, 2)
@@ -1032,20 +1092,21 @@ class TECNAS:
         #Use Crossover or Random search
         self.children = []
         print2(f'GA SEARCH STRATEGY')
-        self.nsga2_obj = TECNAS_NSGAII(pop = self.pop, pop_size = self.NPOP, tecnasObj = self) if config_tecnas.NSGA2 == True else None
-        nsga2_parents_list = self.nsga2_obj.select_parent_pairs() if config_tecnas.NSGA2 == True else None
+        self.nsga2_obj = TECNAS_NSGAII(pop = self.pop, pop_size = self.NPOP, tecnasObj = self) if self.NSGA2 == True else None
+        nsga2_parents_list = self.nsga2_obj.select_parent_pairs() if self.NSGA2 == True else None
         
         for i in range(self.NPOP//2): #//2 because you add two children
             print2('\nSelecting parents')
-            parent1, parent2 = self.random_parent_selection() if config_tecnas.NSGA2 == False else nsga2_parents_list[i]
+            parent1, parent2 = self.random_parent_selection() if self.NSGA2 == False else nsga2_parents_list[i]
             print2(Fore.LIGHTBLUE_EX + f'Using crossover')
-            child1, child2 = self.crossover(parent1, parent2)
-            child1.genotype.gen_list = self.validate_architecture(child1.genotype.gen_list)
-            child2.genotype.gen_list = self.validate_architecture(child2.genotype.gen_list)
+            child1, child2 = self.crossover(arch_obj1=parent1, arch_obj2=parent2)
+            print2(f'Generate offspring function:\n{parent1.idx = }{parent1.integer_encoding = }\n{parent2.idx = }{parent2.integer_encoding = }\n{child1.idx = }{child1.integer_encoding = }\n{child2.idx = }{child2.integer_encoding = }\n')
+            #child1.genotype.gen_list = self.validate_architecture(child1.genotype.gen_list)
+            #child2.genotype.gen_list = self.validate_architecture(child2.genotype.gen_list)
             child1.set_genoStr()
             child2.set_genoStr()
-            child1 = self.make_child(child1, parent1, parent2)
-            child2 = self.make_child(child2, parent1, parent2)
+            child1 = self.make_child(child1, parent1, parent2, distance_type = self.distance_type)
+            child2 = self.make_child(child2, parent1, parent2, distance_type = self.distance_type)
             self.total_cross += 2
             print2('\nTraining children')
             child1 = self.train_model(child1)
@@ -1129,7 +1190,7 @@ class TECNAS:
         if self.representation_type == 'L':
             arch_obj = LayerRepresentation(idx = str(idx), genotypeObj=genotype)
         elif self.representation_type == 'B':
-            arch_obj = BlockRepresentation(idx = str(idx), genotypeObj=genotype)
+            arch_obj = BlockRepresentation(idx = str(idx), genotypeObj=genotype, INTEGER_ENCODING2 = self.INTEGER_ENCODING2)
         else:
             print(Fore.LIGHTRED_EX + f'ERROR (TECNAS.create_individual): {self.representation_type} Representation type not recognized' + Fore.RESET)
             return None
@@ -1137,8 +1198,6 @@ class TECNAS:
         return arch_obj
 
     def random_individual(self):
-        
-        
         gen_list = []
         gen_list = self.random_genlist()
         genotype = Genotype(self.representation_type, self.encoding_type, gen_list)
@@ -1147,7 +1206,7 @@ class TECNAS:
         if self.representation_type == 'L':
             arch_obj = LayerRepresentation(idx = str(idx), genotypeObj = genotype)
         elif self.representation_type == 'B':
-            arch_obj = BlockRepresentation(idx = str(idx), genotypeObj = genotype)
+            arch_obj = BlockRepresentation(idx = str(idx), genotypeObj = genotype, INTEGER_ENCODING2 = self.INTEGER_ENCODING2)
         else:
             print(Fore.LIGHTRED_EX + f'ERROR: {self.representation_type} Representation type not recognized' + Fore.RESET)
             return None
@@ -1255,9 +1314,10 @@ class TECNAS:
             if print_status == True:
                 #print(Fore.LIGHTBLUE_EX + f'\n{ast_bar} EXECUTION {self.exec}/{ConfigClass.EXECUTIONS} GENERATION {self.generation}/{ConfigClass.GENERATIONS} {self.crossover_type} {self.mutation_type} {self.arch_count+1}/{ConfigClass.TOTAL_ARCH} architectures {ast_bar}')
                 hhse_str = set_search_str()
-                print1(Fore.LIGHTBLUE_EX + f'\n{ast_bar} EXECUTION {self.exec}/{ConfigClass.EXECUTIONS} GENERATION {self.generation}/{ConfigClass.GENERATIONS} {self.crossover_type}_{self.mutation_type}  | NSGA2 {config_tecnas.NSGA2} | HHSE {self.HHSE} {hhse_str} {ast_bar}' + Fore.RESET)
+                print1(Fore.LIGHTBLUE_EX + f'\n{ast_bar} EXECUTION {self.exec}/{ConfigClass.EXECUTIONS} GENERATION {self.generation}/{ConfigClass.GENERATIONS} {self.crossover_type}_{self.mutation_type}  | NSGA2 {self.NSGA2} | HHSE {self.HHSE} {hhse_str} {ast_bar}' + Fore.RESET)
             print1(Fore.YELLOW + f'{ConfigClass.DATASET} {ConfigClass.DATASET_PART*100}% |Repr Encoding: {self.representation_type}-{self.encoding_type}| |Surrogate: {self.SURROGATE}| |Train: {self.TRAIN}| |Simulate: {self.SIMULATE}| Surrogate folder: {self.experiment_folder}' + Fore.RESET)
-            print1(Fore.YELLOW + f'Mutation prob: {self.MUT_PROB*100:.2f}%' + Fore.RESET)
+            print1(Fore.YELLOW + f'Mutation prob: {self.MUT_PROB*100:.2f}% Hypermutation: {self.HYPER_MUTATION} Explore SCNG: {self.perc_explore_SCNG*100:.2f}% - Explore SCNF: {self.perc_explore_SCNF*100:.2f}% -- {"SCNG" if self.calculate_SCNG else ""} {"SCNF" if self.calculate_SCNF else ""} {"INT2" if self.INTEGER_ENCODING2 else "INT1"} {self.distance_type}' + Fore.RESET)
+            print1(Fore.YELLOW + f'SCNG_THRESHOLD: {self.SCNG_THRESHOLD:.5f} | SCNF_THRESHOLD: {self.SCNF_THRESHOLD:.5f}' + Fore.RESET)
             print1('\n\n\n')
         
         self.arch_count += 1
@@ -1271,8 +1331,8 @@ class TECNAS:
         self.CPU = f'{cpu_usage}'
         print2(Fore.GREEN + f'\nTraining {arch.idx}...')
         print2(arch.genotype.gen_list)
-        if ConfigClass.REPRESENTATION_TYPE == 'B': #
-            arch.genotype.gen_list = BlockRepresentation.reset_add_pools(arch.genotype.gen_list)
+        #if ConfigClass.REPRESENTATION_TYPE == 'B': #
+        #    arch.genotype.gen_list = BlockRepresentation.reset_add_pools(arch.genotype.gen_list)
         arch.set_report_path(tecnasObj = self)
         print()
         if self.SIMULATE == True:
@@ -1286,7 +1346,7 @@ class TECNAS:
             return None
         return arch
     
-    def set_arch_statuses(self):
+    def set_arch_statuses(self, distance_type = 'None'):
         #Identify BEST, WORST AND MEDIAN. Save their info and reset their status. Also, calculate penalization for BEST.
         #Saving info about the WORST and MEDIAN ARCHITECTURES (BEFORE ELITISM) -------------------------- CHECKING THIS
         #Also store the worst arch and median
@@ -1297,11 +1357,16 @@ class TECNAS:
         self.pop[0].archStatus = 'BEST'
 
         if self.generation > 1:
-            self.pop[0].dPB = hamming_distance(self.prev_best_integerEnc, self.pop[0].integer_encoding)/len(self.pop[0].integer_encoding)
+            #self.pop[0].dPB = hamming_distance(self.prev_best_integerEnc, self.pop[0].integer_encoding)/len(self.pop[0].integer_encoding)
+            vec_prev_best = self.get_vector_for_distances(arch=self.prev_best_arch)
+            vec_pop0 = self.get_vector_for_distances(arch=self.pop[0])
+            distance = get_distance(vector=vec_prev_best,matrix=np.asarray(vec_pop0).reshape(1, -1), distance_type=distance_type)
+            self.pop[0].dPB = distance[0] 
+            #self.pop[0].dPB = get_distance(vectors_list = self.get_vectors_for_distances(arch1 = self.prev_best_arch, arch2 = self.pop[0]), distance_type = distance_type)
         else:
             print2('First generation, no previous best architecture')
             self.pop[0].dPB = 0
-        self.prev_best_integerEnc = self.pop[0].integer_encoding.copy()
+        self.prev_best_arch = copy.deepcopy(self.pop[0])
         #self.reporter.save_arch_info(self, self.pop[-1]) #Worst
         #self.reporter.save_arch_info(self, self.pop[lower_median_idx]) #Median
         self.pop[-1].archStatus = ''
@@ -1309,7 +1374,11 @@ class TECNAS:
         self.get_NFHT(self.pop[0])
         self.pop[0].flops, self.pop[0].num_params, self.pop[0].sizeMB = self.flops_params_gen_list_str(get_realMetrics = False, gen_list_str = str(self.pop[0].genotype.gen_list))
         #resetInfo is used for resetting some info about the best arch. saveRatios is for saving succ cross and succ mut.
-        
+        #print(f'set_arch_statuses function BEST: {self.pop[0].idx = }{self.pop[0].integer_encoding = }{self.pop[0].acc = }')
+        #for arch in self.pop:
+        #    print(f'{arch.idx = }{arch.integer_encoding = }{arch.acc = }{arch.archStatus = }')
+        #print(f'set_arch_Statuses finish')
+        #time.sleep(10)
         self.reporter.save_arch_info(self, self.pop[0]) #Best
         self.pop[0].archStatus = ''
         print2('\nIdentifying BEST, MEDIAN and WORST architectures complete')
@@ -1343,7 +1412,7 @@ class TECNAS:
         elif config_tecnas.HHSE_GREEDY == True:
             #Calculates all combinations and selects the best one.
             self.crossover_type, self.mutation_type =  self.HHSE_GREEDY()
-            self.set_arch_statuses()
+            self.set_arch_statuses(distance_type = self.distance_type) #This is done here because the greedy function applies all GOs and needs to know which one is best.
         elif config_tecnas.HHSE_MARKOV == True:
             self.current_state = self.HHSE_MARKOV()
             self.crossover_type, self.mutation_type = self.current_state.split('_')
@@ -1373,45 +1442,8 @@ class TECNAS:
         return cross_type, mut_type
         #self.crossover_type, self.mutation_type = ('TPC', 'MPAR') if self.operator == 'NONE' else self.operator.split('_')
 
-    def load_markov_matrices(self):
-        #Load the Markov matrices from the CSV files and return them as a dictionary of dataframes.
-        print1(f'Loading Markov matrices from {self.matrix_folder}')
-        for filename in os.listdir(self.matrix_folder):
-            if filename.startswith("matrix_") and filename.endswith(".csv"):
-                file_path = os.path.join(self.matrix_folder, filename)
-                df = pd.read_csv(file_path, index_col=0)
-                self.markov_type = df.index.name
-                self.markov_dict[self.markov_type] = df.copy()
-        self.markov_type = ''
-        print1('Markov matrices loaded successfully\n')
-
-    def HHSE_MARKOV(self):
-        progress = self.generation / self.total_gen
-        if self.COMBINED_MARKOV: #COMBINED in HHSE_MARKOV_TYPES 
-            if progress <= self.limits[0]:
-                self.markov_type = 'MUT'
-            elif progress <= self.limits[1]:
-                self.markov_type = 'HV'
-            elif progress <= self.limits[2]:
-                self.markov_type = 'DHV'
-            elif progress <= self.limits[3]:
-                self.markov_type = 'CROSS'
-            while self.current_state not in self.markov_dict[self.markov_type].index:
-                print(f'Current state {self.current_state} not found in Markov matrix {self.markov_type}. Selecting another state randomly.')
-                self.current_state = random.choice(self.markov_dict[self.markov_type].index.tolist())
-
-        if self.generation == 1:
-            self.current_state = random.choice(self.markov_dict[self.markov_type].index.tolist())
-            self.GOs_history = [self.current_state]
-
-        probabilities = self.markov_dict[self.markov_type][self.current_state].values
-        states = self.markov_dict[self.markov_type].columns.tolist()
-        probabilities = probabilities / probabilities.sum()
-        next_state = np.random.choice(states, p=probabilities)
-        return next_state
-
     def HHSE_Random(self):
-        return random.choice(config_tecnas.crossoverList_hhse), random.choice(config_tecnas.mutationList_hhse)
+        return random.choice(self.crossover_types_list), random.choice(self.mutation_types_list)
 
     def HHSE_GREEDY(self):
         print('Applying all genetic operators')
@@ -1425,7 +1457,7 @@ class TECNAS:
             cross, mut = 'NONE', 'NONE' #Next step is to apply rest of GOs to calculate UCB info.
             return cross, mut
         if config_tecnas.HHSE_TEC_IMPROVED:
-            self.CROSS_GOs, self.MUT_GOs, self.HV_GOs = config_tecnas.set_HHSE_TEC_GOs(config_tecnas.REPRESENTATION_TYPE, config_tecnas.ENCODING_TYPE)
+            self.CROSS_GOs, self.MUT_GOs, self.HV_GOs = config_tecnas.set_HHSE_TEC_GOs(self.representation_type, self.encoding_type)
             progress = self.generation / self.total_gen
             if progress <= 0.40:
                 cross, mut = self.TECNAS_AOS_obj.select_operator(candidates=self.MUT_GOs).split('_')
@@ -1443,7 +1475,7 @@ class TECNAS:
         def considerlater(self):
             #Choose the GO, according to the probability.
             #CROSS_DICT = {'SPC_MPOLY': 0.45, 'SPC_MNUF': 0.35, 'SPC_NONE': 0.2}
-            self.CROSS_DICT, self.MUT_DICT, self.HV_DICT, self.GD_DICT = config_tecnas.set_HHSE_TEC_GOs(config_tecnas.REPRESENTATION_TYPE, config_tecnas.ENCODING_TYPE)
+            self.CROSS_DICT, self.MUT_DICT, self.HV_DICT, self.GD_DICT = config_tecnas.set_HHSE_TEC_GOs(self.representation_type, self.encoding_type)
             progress = self.generation / self.total_gen
             
             if progress <= self.limits[0]:
@@ -1488,6 +1520,7 @@ class TECNAS:
                 self.crossover_type = crossover_type
                 for mutation_type in ConfigClass.mutation_types_list:
                     self.mutation_type = mutation_type
+                    print(crossover_type, mutation_type)
                     self.ENAS()
         
             
@@ -1508,14 +1541,16 @@ class TECNAS:
         else:
             self.search_strategy = 'GA'
         seed_idx = 0
-        self.prev_best_integerEnc = []
-        
+        self.prev_best_arch = []
+        if not self.validate_encoding_genetic_operators(): return None
         for e in range(1,ConfigClass.EXECUTIONS+1):
-            self.local_seed = config_tecnas.SEED_LIST[seed_idx]
+            self.SCNF_history = []
+            self.SCNG_history = []
+            self.local_seed = self.SEED_LIST[seed_idx]
             random.seed(self.local_seed)
             np.random.seed(self.local_seed)
             #tf.random.set_seed(self.local_seed)
-            self.MUT_PROB = ConfigClass.MUT_PROB
+            #self.MUT_PROB = ConfigClass.MUT_PROB
             self.exec = e
             self.trained_archs = {}
             self.generation = 1
@@ -1525,6 +1560,9 @@ class TECNAS:
             self.GOs_history = []
             self.GOs_HV = {k: [0, 0, 0] for k in self.GOs_HV} #HV, PREV_HV and dHV.
             self.TECNAS_AOS_obj = TECNAS_AOS(tecnasObj = self)
+            self.encoding_vectors_history = set()
+            self.objectives_history = set()
+            
             for g in range(1,ConfigClass.GENERATIONS+1):
                 self.pool = []
                 self.generation = g
@@ -1532,39 +1570,115 @@ class TECNAS:
                 if self.HHSE == True: #Choose crossover and mutation type automatically
                     print2(Fore.MAGENTA + 'Hyper-heuristic selection of genetic operators' + Fore.RESET)
                     self.select_HHSE_method()
-                if not config_tecnas.HHSE_GREEDY: #This means the new generation hasn't been generated yet. If this is true, GREEDY has already calculated the best self.pop
+                if not config_tecnas.HHSE_GREEDY: #This means the new gneration hasn't been generated yet. If this is true, GREEDY has already calculated the best self.pop
+                    ########### HYPER MUTATION ##########################################
+                    if self.HYPER_MUTATION:
+                        if self.perc_explore_SCNG <= self.HYPER_MUT_THRESHOLD: #Exploration starts to weaken and exploiting started. 
+                            self.MUT_PROB = self.HYPER_MUT_PROB
+                            print(Fore.RED + f'Hyper mutation applied {self.perc_explore_SCNG = }. New mutation probability: {self.MUT_PROB}' + Fore.RESET)
+                        else:
+                            self.MUT_PROB = self.ORIGINAL_MUT_PROB
+
+                    ################# BALANCING ##########################################
+                    #self.search_name = 'TEC_BALANCE3'
+                    #cross_list = ['SPC', 'TPC', 'UC', 'SBX']
+                    #mut_list = ['MPOLY', 'MNUF']
+                    #if self.perc_exploit_SCNG > 0.5: #It means exploration <= 0.5  Stop exploiting, start exploration
+                    #    self.crossover_type = random.choice(cross_list)
+                    #    self.mutation_type = 'MNUF'
+                    #else: #Means exploitation <= 0.5 and exploration is > 0.5 #Continue exploiting
+                    #    self.crossover_type = random.choice(cross_list)
+                    #    self.mutation_type = 'MPOLY'
+                    ################# BALANCING ##########################################
                     self.genetic_operators()
                     self.report_training = True
                     self.pool = self.pop + self.children
+
+                    self.save_encoding_vectors_history(self.pool) if self.calculate_SCNG else None
+                    self.save_objectives_history(self.pool) if self.calculate_SCNF else None
                     self.sorted_pool = sorted(self.pool, key=lambda obj: obj.acc, reverse = True) #Best archs first
                     self.pop = self.selection(pop = copy.deepcopy(self.pop)) #Here, WORST AND MEDIAN ARCHS ARE IDENTIFIED
-                    self.GD = self.calculate_GD(self.pop)
+                    self.GD = self.calculate_GD(archs_list = self.pop, distance_type = self.distance_type)
+                    
+                    self.calculate_SCN(SCN_G = self.calculate_SCNG, SCN_F = self.calculate_SCNF) if self.calculate_SCNG or self.calculate_SCNF else None
+                    
                     self.reporter.save_generation_status(Status(tecnasObj = self, crosstype = self.crossover_type, muttype = self.mutation_type, pop = self.pop, JUST_PARETO = True)) #Save the info from the pareto front.
-                    self.set_arch_statuses()
+                    self.set_arch_statuses(distance_type = self.distance_type)
+
                 if config_tecnas.HHSE_TEC:
                     if self.generation > 1:
                         self.TECNAS_AOS_obj.total_selections += 1 if config_tecnas.HHSE_TEC else 0
                         self.TECNAS_AOS_obj.update_arm(GO_str = f'{self.crossover_type}_{self.mutation_type}', reward = self.TECNAS_AOS_obj.calculate_reward(*self.AOS_rwd_percentages)) if config_tecnas.HHSE_TEC else None
                        
-                    
             self.report_op_counts(results_folder = self.children[0].path_folder) if config_tecnas.HHSE_GREEDY_FIXED else None
             self.generate_total_counts(os.path.join(self.children[0].path_folder, f"counts_{config_tecnas.HHSE_GREEDY_CRITERIA}")) if config_tecnas.HHSE_GREEDY_FIXED else None
             self.reporter.flush(self.pop[0].path_filereport)
-            seed_idx += 1 if seed_idx < len(config_tecnas.SEED_LIST)-1 else 0
-            self.local_seed = config_tecnas.SEED_LIST[seed_idx]
+            seed_idx += 1 if seed_idx < len(self.SEED_LIST)-1 else 0
+            self.local_seed = self.SEED_LIST[seed_idx]
             self.save_histories()
-            self.markov_matrix(transitions = self.GOs_history, iterations=1000, tolerance=1e-10) if config_tecnas.HHSE_GREEDY == True else None
             self.TECNAS_AOS_obj.report_arms_csv(results_folder = self.children[0].path_folder) if config_tecnas.HHSE_TEC else None
+            self.SCN_stats_histogram()
 
-        if config_tecnas.HHSE_GREEDY == True and not config_tecnas.HHSE_GREEDY_FIXED:
-            self.markov_mean_stationary_probabilities()
-            self.markov_barplot_mean_stationary_probabilities()
-            self.markov_aggregate_matrix()
-
-    
-        
+                       
+            
 
     def __init__(self, HHSE = False, NSGA2 = False, report_training = True, representation_type = ConfigClass.REPRESENTATION_TYPE, encoding_type = ConfigClass.ENCODING_TYPE, experiment_folder = '', regressor_type = -1):
+
+        def set_MUT_PROB(INTEGER_ENCODING2):
+            #Create a random arch and get its vector length. God, this is so stupid.
+            arch = self.random_individual()
+            if self.encoding_type == 'BIN':
+                vec_bin = arch.binary_encoding2_flattened if INTEGER_ENCODING2 else arch.binary_encoding 
+                prob_mut = 1/sum(len(v) for v in vec_bin)
+            elif self.encoding_type == 'INT':
+                vec_int = arch.integer_encoding2_flattened if INTEGER_ENCODING2 else arch.integer_encoding
+                prob_mut = 1/len(vec_int)
+            elif self.encoding_type == 'REAL':
+                vreal = arch.real_encoding2_flattened if INTEGER_ENCODING2 else arch.real_encoding
+                prob_mut = 1/len(vreal)
+            return prob_mut
+
+        def set_distance(encoding_type):
+            if encoding_type == 'BIN':
+                return 'hamming'
+            elif encoding_type == 'INT':
+                return 'manhattan' if config_tecnas.INTEGER_ENCODING2 else 'family'
+            elif encoding_type == 'REAL':
+                return 'manhattan' if config_tecnas.INTEGER_ENCODING2 else 'family'
+            else:
+                print(Fore.LIGHTRED_EX + f'ERROR: {encoding_type} Encoding type not recognized' + Fore.RESET)
+                return None
+        #SCN THRESHOLD
+        #BIN INT1:  SCNF 0.0080 SCNG 0.030
+        #INT INT1:  SCNF 0.0063 SCNG 0.050
+        #REAL INT1: SCNF 0.0076 SCNG 0.070
+        #BIN INT2:  SCNF 0.0083 SCNG 0.030
+        #INT INT2:  SCNF 0.0080 SCNG 0.035
+        #REAL INT2: SCNF 0.0080 SCNG 0.035
+        self.SCNF_THRESHOLDS = {'BIN_INT1' : 0.0080,  'BIN_INT2': 0.0083,'INT_INT1': 0.0063, 'INT_INT2': 0.0080, 'REAL_INT1': 0.0076, 'REAL_INT2': 0.0080}
+        self.SCNG_THRESHOLDS = {'BIN_INT1' : 0.030,  'BIN_INT2': 0.030,'INT_INT1': 0.050, 'INT_INT2': 0.035, 'REAL_INT1': 0.070, 'REAL_INT2': 0.0350}
+        #{'BIN_INT1' : 0.26,  'BIN_INT2': 0.011,'INT_INT1': 0.26, 'INT_INT2': 0.011,
+                               # 'REAL_INT1': 0.26, 'REAL_INT2': 0.011}
+
+        
+        #config_tecnas CONSTANTS################################################
+        self.REPR_ENC_STR = f'{representation_type}{encoding_type}'
+        self.SEED_LIST = config_tecnas.SEED_LIST
+        self.calculate_SCNG = config_tecnas.calculate_SCNG
+        self.calculate_SCNF = config_tecnas.calculate_SCNF
+        self.NSGA2 = config_tecnas.NSGA2
+        self.SCNG_THRESHOLD = self.SCNG_THRESHOLDS[f'{encoding_type}_INT{2 if config_tecnas.INTEGER_ENCODING2 else 1}']
+        self.SCNF_THRESHOLD = self.SCNF_THRESHOLDS[f'{encoding_type}_INT{2 if config_tecnas.INTEGER_ENCODING2 else 1}']
+        self.HHSE_GREEDY_CRITERIA = config_tecnas.HHSE_GREEDY_CRITERIA
+        self.HYPER_MUTATION = config_tecnas.HYPER_MUTATION
+        self.HYPER_MUT_PROB = config_tecnas.HYPER_MUT_PROB
+        self.HYPER_MUT_THRESHOLD = config_tecnas.HYPER_MUT_THRESHOLD
+        #self.distance_type = 'hamming' if encoding_type == 'BIN' else self.distance_type
+
+        self.distance_type = set_distance(encoding_type)
+        ############################################################################
+
+        self.INTEGER_ENCODING2 = config_tecnas.INTEGER_ENCODING2
         self.search_name = '' #Indicates type of search strategy and encoding. For example, LREAL_SPC_MPAR_NH, BREAL_MARKOV_MUT_NH (N means NSGA2, H means HHSE).
         self.report_training = report_training
         self.HHSE = HHSE #Hyper-heuristic selection of genetic operators
@@ -1572,8 +1686,10 @@ class TECNAS:
         self.ast_bar = 50*'+'
         self.representation_type = representation_type #Layer (L), Block (B)
         self.encoding_type = encoding_type
+        
         self.NPOP = ConfigClass.MAIN_NPOP
-        self.MUT_PROB = ConfigClass.MUT_PROB
+        self.MUT_PROB = set_MUT_PROB(self.INTEGER_ENCODING2)
+        self.ORIGINAL_MUT_PROB = self.MUT_PROB #This is because maybe MUT_PROB may change
         self.crossover_types_list = ConfigClass.crossover_types_list if HHSE == False else config_tecnas.crossoverList_hhse
         self.mutation_types_list = ConfigClass.mutation_types_list if HHSE == False else config_tecnas.mutationList_hhse
         self.crossover_type = None
@@ -1589,7 +1705,7 @@ class TECNAS:
         self.total_mut = 0
         self.total_cross = 0
         self.GD = 0 #Generational Distance
-        self.prev_best_integerEnc = None
+        self.prev_best_arch = None
         self.pop = []
         self.children = []
         self.pool = [] #Parents + children
@@ -1597,24 +1713,37 @@ class TECNAS:
         self.flops_archs = {} #Dictionary with architectures whose FLOPs and NumParams were already calculated
         self.accuracy_histories = [] #To plot all accuracies through epochs
         self.loss_histories = [] #To plot all accuracies through epochs
+        self.encoding_vectors_history = set() #For calculating SCN_G. I use a set to avoid duplicates.
+        self.objectives_history = set() #For calculating SCN_F.
+        self.NEXPLOIT_SCNG = 0
+        self.NEXPLORE_SCNG = 0
+        self.perc_explore_SCNG = 1 
+        self.perc_exploit_SCNG = 0
+        self.NEXPLORE_SCNF = 0
+        self.NEXPLOIT_SCNF = 0
+        self.perc_explore_SCNF = 1
+        self.perc_exploit_SCNF = 0
+        self.SCNF_history = []
+        self.SCNG_history = []
+        
         self.NUM_DENSE = ConfigClass.DATASET_NUMDENSE_DICT[ConfigClass.DATASET]
-        self.MAXINT = Globals.INDEXES_POOLS[-1] if config_tecnas.REPRESENTATION_TYPE == 'L' else len(BlockRepresentation.all_blocks) - 1
+        self.MAXINT = Globals.INDEXES_POOLS[-1] if self.representation_type == 'L' else len(BlockRepresentation.all_blocks) - 1
         
         #============================================================= MAX MIN FLOPS AND PARAMS FOR HV NORMALIZATION ==============================================================
         self.BLOCKS_MINFLOPS  = 1.24e8
-        self.BLOCKS_MAXFLOPS  = 1.6e10
+        self.BLOCKS_MAXFLOPS  = 1.6e10   #avg: 3e9
         self.BLOCKS_MINPARAMS = 1.6e5
-        self.BLOCKS_MAXPARAMS = 2.51e7
+        self.BLOCKS_MAXPARAMS = 2.51e7   #avg: 6e6
 
         self.LAYERS_MINFLOPS  = 1e6
         self.LAYERS_MAXFLOPS  = 1.71e10
         self.LAYERS_MINPARAMS = 1e3
         self.LAYERS_MAXPARAMS = 1.42e8
 
-        self.MINFLOPS =  self.BLOCKS_MINFLOPS  if config_tecnas.REPRESENTATION_TYPE == 'B' else self.LAYERS_MINFLOPS
-        self.MINPARAMS = self.BLOCKS_MINPARAMS if config_tecnas.REPRESENTATION_TYPE == 'B' else self.LAYERS_MINPARAMS
-        self.MAXFLOPS =  self.BLOCKS_MAXFLOPS  if config_tecnas.REPRESENTATION_TYPE == 'B' else self.LAYERS_MAXFLOPS
-        self.MAXPARAMS = self.BLOCKS_MAXPARAMS if config_tecnas.REPRESENTATION_TYPE == 'B' else self.LAYERS_MAXPARAMS
+        self.MINFLOPS =  self.BLOCKS_MINFLOPS  if self.representation_type == 'B' else self.LAYERS_MINFLOPS
+        self.MINPARAMS = self.BLOCKS_MINPARAMS if self.representation_type == 'B' else self.LAYERS_MINPARAMS
+        self.MAXFLOPS =  self.BLOCKS_MAXFLOPS  if self.representation_type == 'B' else self.LAYERS_MAXFLOPS
+        self.MAXPARAMS = self.BLOCKS_MAXPARAMS if self.representation_type == 'B' else self.LAYERS_MAXPARAMS
 
         #For HHSE ========================================= HHSE ========================================================================
         self.TECNAS_AOS_obj = None #For MAB and UCB.
@@ -1626,29 +1755,25 @@ class TECNAS:
             self.GOs_names.remove('NONE_NONE')
         #Save here all population generated through all combinations of crossover and mutation
         #For example, = {'SPC_MPAR': [arch1, arch2, ...], 'SPC_MSWAP': [arch1, arch2, ...], ...}
-        self.GOs_names = sum(config_tecnas.set_HHSE_TEC_GOs(config_tecnas.REPRESENTATION_TYPE, config_tecnas.ENCODING_TYPE), []) if config_tecnas.HHSE_TEC else self.GOs_names
+        self.GOs_names = sum(config_tecnas.set_HHSE_TEC_GOs(self.representation_type, self.encoding_type), []) if config_tecnas.HHSE_TEC else self.GOs_names
         self.GOs_population_dict = {}
         self.selected_by = ' ' #Depicts why the GO was selected as the best one in HHSE GREEDY
         self.GOs_history = [] #['SPC_MPAR', 'TPC_MSWAP', 'UC_MPAR', 'TPC_MSWAP',...} GOs order of application
         self.GOs_HV = {k: [0, 0, 0] for k in self.GOs_names} #HV, PREV_HV and dHV.
-        #self.matrix_folder = os.path.join(path, 'results', experiment_folder, 'markov_matrix')
-        self.matrix_folder = os.path.join(path, 'markov_matrices', f'markov_matrices_{config_tecnas.REPR_ENC_STR}')
-        self.markov_dict = {}
-        self.load_markov_matrices() if config_tecnas.HHSE_MARKOV == True else None
-        self.loaded_markov_types = list(self.markov_dict.keys())
-        self.markov_type = ''
+        
         self.perc_intervals = config_tecnas.perc_intervals  #This is for setting the time intervals for COMBINED MARKOV.
         self.total_gen = config_tecnas.GENERATIONS
         self.limits = []
         self.cumulative = 0
         for p in self.perc_intervals:
-                self.cumulative += p / 100
-                self.limits.append(self.cumulative)
+            self.cumulative += p / 100
+            self.limits.append(self.cumulative)
 
                
         #================================================= HHSE ========================================================================
 
         self.HV = 0 #Hypervolume of the pareto front in the current generation
+        self.riesz_energy = 0 #Riesz energy of the pareto front in the current generation
         self.prev_HV = 0 #previous HV for calculating delta HV
         self.dHV = 0
         self.report_columns = ["Best_accuracy", "Loss", "CPU_hrs", "Num_params", "FLOPs", "Acc_mean", "Loss_mean", "CPU_hrs_mean", "Num_params_mean", "FLOPs_mean", "Acc_std", "Loss_std", "CPU_hrs_std", "Num_params_std","FLOPs_std"]
@@ -1731,19 +1856,17 @@ print(archL.integer_encoding)
 12: {'DENSE': [512, 'relu']}
 '''
 
-
-
 '''
-0: ({'CONV': [32, 3]}, {'CONV': [32, 3]})
-1: ({'CONV': [32, 3]}, {'CONV': [32, 5]})
-2: ({'CONV': [32, 3]}, {'CONV': [64, 3]})
-3: ({'CONV': [32, 3]}, {'CONV': [64, 5]})
-4: ({'CONV': [32, 3]}, {'CONV': [128, 3]})
-5: ({'CONV': [32, 3]}, {'CONV': [128, 5]})
-6: ({'CONV': [32, 3]}, {'CONV': [256, 3]})
-7: ({'CONV': [32, 3]}, {'CONV': [256, 5]})
-8: ({'CONV': [32, 5]}, {'CONV': [32, 3]})
-9: ({'CONV': [32, 5]}, {'CONV': [32, 5]})
+0:  ({'CONV': [32, 3]}, {'CONV': [32, 3]})
+1:  ({'CONV': [32, 3]}, {'CONV': [32, 5]})
+2:  ({'CONV': [32, 3]}, {'CONV': [64, 3]})
+3:  ({'CONV': [32, 3]}, {'CONV': [64, 5]})
+4:  ({'CONV': [32, 3]}, {'CONV': [128, 3]})
+5:  ({'CONV': [32, 3]}, {'CONV': [128, 5]})
+6:  ({'CONV': [32, 3]}, {'CONV': [256, 3]})
+7:  ({'CONV': [32, 3]}, {'CONV': [256, 5]})
+8:  ({'CONV': [32, 5]}, {'CONV': [32, 3]})
+9:  ({'CONV': [32, 5]}, {'CONV': [32, 5]})
 10: ({'CONV': [32, 5]}, {'CONV': [64, 3]})
 11: ({'CONV': [32, 5]}, {'CONV': [64, 5]})
 12: ({'CONV': [32, 5]}, {'CONV': [128, 3]})

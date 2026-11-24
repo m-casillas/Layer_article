@@ -1,0 +1,26 @@
+#rm -rf /tmp/tmux-$(id -u)  por si muere tmux
+#Normales      INTEGER_ENCODING2 = False, HYPERMUT = False
+python3 experiments_ubuntu.py REAL SPC,TPC,UC,SBX,NONE  MPOLY,MNUF,NONE False False
+python3 experiments_ubuntu.py BIN SPC,TPC,UC,NONE  MBFLIP,NONE False False
+python3 experiments_ubuntu.py INT SPC,TPC,UC,NONE  MPAR,MSWAP,NONE False False
+
+
+#Normales      INTEGER_ENCODING2 = True, HYPERMUT = False
+
+python3 experiments_ubuntu.py REAL SPC,TPC,UC,SBX,NONE  MPOLY,MNUF,NONE True False
+python3 experiments_ubuntu.py BIN SPC,TPC,UC,NONE  MBFLIP,NONE True False
+python3 experiments_ubuntu.py INT SPC,TPC,UC,NONE  MPAR,MSWAP,NONE True False
+
+
+#HYPERMUT (quitar NONE de mutación)
+
+INTEGER_ENCODING2 = False, HYPERMUT = True
+python3 experiments_ubuntu.py REAL SPC,TPC,UC,SBX,NONE  MPOLY,MNUF False True
+python3 experiments_ubuntu.py BIN SPC,TPC,UC,NONE  MBFLIP False True
+python3 experiments_ubuntu.py INT SPC,TPC,UC,NONE  MPAR,MSWAP False True
+
+#INTEGER_ENCODING2 = True, HYPERMUT = True
+python3 experiments_ubuntu.py REAL SPC,TPC,UC,SBX,NONE  MPOLY,MNUF True True
+python3 experiments_ubuntu.py BIN SPC,TPC,UC,NONE  MBFLIP True True
+python3 experiments_ubuntu.py INT SPC,TPC,UC,NONE  MPAR,MSWAP True True
+

@@ -1,7 +1,9 @@
 import joblib
 from LayerRepresentation import LayerRepresentation
+from BlockRepresentation import BlockRepresentation
 from Genotype import Genotype
 from globalsENAS import *
+
 import ast
 from file_handler import *
 from datetime import datetime
@@ -113,6 +115,7 @@ class Surrogate_ENAS:
 
     def load_arch(self, arch):
             print2(f'Loading architecture {arch.idx} for predicting accuracy')
+            print2(f'Surrogate_ENAS load_arch:Architecture integer encoding: {arch.integer_encoding}')
             self.encodings = arch.integer_encoding
             self.encoding_matrix = np.array(self.encodings, dtype=np.float32)
             self.X = pd.DataFrame(self.encoding_matrix.reshape(1, -1), columns=self.columns) #CHANGED THIS ONE

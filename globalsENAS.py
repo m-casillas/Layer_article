@@ -57,6 +57,16 @@ from sklearn.model_selection import train_test_split
 from pympler import asizeof
 import tracemalloc
 
+def low_high_integer2(i):
+    #Sets new values for low and high for integer_encoding2. Used for SBX, MPOLY and MNUF.
+    if i%2 == 0: #Number represents number of filters. Min is 0, max is 3
+        min_int = 0
+        max_int = Globals.CONV_MAXFILTER_IND
+    else: #Number represents kernel size. Min is 0, max is 1
+        min_int = 0
+        max_int = Globals.CONV_MAXKERNEL_IND
+    return min_int, max_int
+
 def delete_columns_dict(dictionary, listofKeys_to_remove):
     #Returns a new dictionary without the specified keys.
     return {k: v for k, v in dictionary.items() if k not in listofKeys_to_remove}
@@ -377,7 +387,7 @@ def count_params_analytic(arch, bytes_per_param=4):
             # Conv weights (bias=False)
             conv_params = C_in * C_out * K * K
             trainable += conv_params
-            # BatchNorm
+            # BatchNorm     
             trainable += 2 * C_out          # gamma, beta
             non_trainable += 2 * C_out      # running mean, var
             C_in = C_out
@@ -468,28 +478,130 @@ def get_key_from_dict(dictio):
     #Returns the first key of a dictionary.
     return list(dictio.keys())[0]
 
-def hamming_distance(str1, str2):
-    #Calculate the Hamming distance between two strings. (integer, binary vectors, etc.)
-    #It returns how many characters differ between two strings.
-    #-1 means the architecture doesnot have a hamming distance (i.e. a children and its mutation, if it didn't mutate)
-    #-2 means the vectors were not the same size.
-    if len(str1) != len(str2):
-        print('\nHamming distance error: Vectors must be of the same length')
-        print(f'{str1 = }')
-        print(f'{str2 = }')
-        print('====================================\n')
-        return -2
-    return sum(c1 != c2 for c1, c2 in zip(str1, str2))
+def get_distance(vector = None, matrix = None, distance_type='NONE'):
+    if distance_type == 'manhattan':
+        return normalized_manhattan_distance(vector, matrix)
+    elif distance_type == 'hamming':
+        return normalized_hamming_distance(vector, matrix)
+    elif distance_type == 'family':
+        return family_distance(vector, matrix)
+    else:
+        print(f'Error: Unknown distance type {distance_type}')
+        return None
 
-def calculate_all_hamming_distances(arch_obj, mutated = False):
+
+def family_distance(vector_a = None, matrix_b = None):
+    vector_a = np.asarray(vector_a, dtype=np.int16)
+    matrix_b = np.asarray(matrix_b, dtype=np.int16)
+    if vector_a.shape != (8,):
+        print("vector_a must have exactly 8 elements.")
+        return None
+    if matrix_b.ndim != 2 or matrix_b.shape[1] != 8:
+        print("matrix_b must have shape (N, 8).")
+        return None
+    if np.any((vector_a < 0) | (vector_a > 63)):
+        print("Elements must be in the range [0, 63].")
+        return None
+    if np.any((matrix_b < 0) | (matrix_b > 63)):
+        print("Elements must be in the range [0, 63].")
+        return None
+    # Decompose into families and configurations
+    family_a, config_a = np.divmod(vector_a, 8)
+    family_b, config_b = np.divmod(matrix_b, 8)
+    # Decompose configurations into filters and kernels
+    filters_a, kernel_a = np.divmod(config_a, 2)
+    filters_b, kernel_b = np.divmod(config_b, 2)
+    # Normalized Euclidean distance
+    euclidean_distance = np.sqrt( ((filters_a - filters_b) / 3)**2 + (kernel_a - kernel_b)**2 ) / np.sqrt(2)
+    # Identify equal elements and same-family elements
+    identical = matrix_b == vector_a
+    same_family = family_b == family_a
+    # Calculate hierarchical distances
+    element_distances = np.where(identical, 0, np.where(same_family, 1 + 0.5 * euclidean_distance, 2))
+    # Sum distances and normalize
+    return np.sum(element_distances, axis=1) / 16
+
+def normalized_manhattan_distance(vector = None, matrix = None, INTEGER_ENCODING2=True):
+    vector = np.asarray(vector, dtype=np.float64)
+    matrix = np.asarray(matrix, dtype=np.float64)
+    if vector.ndim != 1:
+        print("Error: vector must be 1-dimensional.")
+        return None
+    if matrix.ndim != 2:
+        print("Error: matrix must be 2-dimensional.")
+        return None
+    if matrix.shape[1] != vector.shape[0]:
+        print("Error: Vector and matrix dimensions do not match.")
+        return None
+    n = len(vector)
+    #print(f'Manhattan distance')
+    #print(vector)
+    #print(matrix)
+    if INTEGER_ENCODING2:
+        idx_max_filter = Globals.NUM_FILTERS_LIST.index(max(Globals.NUM_FILTERS_LIST))
+        idx_min_filter = Globals.NUM_FILTERS_LIST.index(min(Globals.NUM_FILTERS_LIST))
+        idx_max_kernel = Globals.CONV_KERNEL_LIST.index(max(Globals.CONV_KERNEL_LIST))
+        idx_min_kernel = Globals.CONV_KERNEL_LIST.index(min(Globals.CONV_KERNEL_LIST))
+        ranges = np.empty(n, dtype=np.float64)
+        ranges[0::2] = idx_max_filter - idx_min_filter
+        ranges[1::2] = idx_max_kernel - idx_min_kernel
+        distances = np.sum(np.abs(matrix - vector) / ranges, axis=1) / n
+    else:
+        print('Error: normalized_manhattan_distance is only implemented for INTEGER_ENCODING2=True.')
+        distances = None
+    return distances
+
+def normalized_hamming_distance(vector = None, matrix = None):
+    vector = np.asarray(vector)
+    matrix = np.asarray(matrix)
+    print2(f'Calculating normalized Hamming distance between vector of shape {vector.shape} and matrix of shape {matrix.shape}')
+    print2(f'Vector: {vector}')
+    print2(f'Matrix: {matrix}')
+    if vector.ndim != 1:
+        print("Error: vector must be 1-dimensional.")
+        return None
+    if matrix.ndim != 2:
+        print("Error: matrix must be 2-dimensional.")
+        return None
+    if matrix.shape[1] != vector.shape[0]:
+        print("Error: Vector and matrix dimensions do not match.")
+        return None
+    distances = np.count_nonzero(matrix != vector, axis=1) / len(vector)
+    print2(f'Distances: {distances}')
+    return distances
+
+
+def calculate_all_distances(arch_obj=None, mutated=False, distance_type='NONE'):
+    if mutated:
+        arch_obj.dP1 = -1
+        arch_obj.dP2 = -1
+        vector = (arch_obj.integer_encoding2_flattened  if config_tecnas.INTEGER_ENCODING2  else arch_obj.integer_encoding)
+        vector_before = (arch_obj.before_mutation.integer_encoding2_flattened  if config_tecnas.INTEGER_ENCODING2  else arch_obj.before_mutation.integer_encoding )
+        distances = get_distance(vector=vector, matrix=np.asarray(vector_before).reshape(1, -1), distance_type=distance_type)
+        arch_obj.dBM = distances[0] if distances is not None else None
+    else:
+        vector = (arch_obj.integer_encoding2_flattened if config_tecnas.INTEGER_ENCODING2 else arch_obj.integer_encoding )
+        vector_parent1 = ( arch_obj.parent1.integer_encoding2_flattened if config_tecnas.INTEGER_ENCODING2 else arch_obj.parent1.integer_encoding)
+        vector_parent2 = (arch_obj.parent2.integer_encoding2_flattened  if config_tecnas.INTEGER_ENCODING2 else arch_obj.parent2.integer_encoding)
+        distances_p1 = get_distance(vector=vector, matrix=np.asarray(vector_parent1).reshape(1, -1), distance_type=distance_type)
+        distances_p2 = get_distance( vector=vector, matrix=np.asarray(vector_parent2).reshape(1, -1), distance_type=distance_type)
+        arch_obj.dP1 = distances_p1[0] if distances_p1 is not None else None
+        arch_obj.dP2 = distances_p2[0] if distances_p2 is not None else None
+
+
+def calculate_all_distances2(arch_obj = None, mutated = False, distance_type = 'NONE'):
+    
     #Mutated is used to check if the architecture was mutated or not. If it was, calculate the hamming distance between itself and the architecture before mutation.
     if mutated == True:
         arch_obj.dP1 = -1
         arch_obj.dP2 = -1
-        arch_obj.dBM = hamming_distance(arch_obj.integer_encoding, arch_obj.before_mutation.integer_encoding)/arch_obj.integer_size
+        #arch_obj.dBM = normalized_hamming_distance(arch_obj.integer_encoding, arch_obj.before_mutation.integer_encoding)
+        arch_obj.dBM = get_distance(v1 = arch_obj.integer_encoding, v2 = arch_obj.before_mutation.integer_encoding, distance_type = distance_type)
     else:
-        arch_obj.dP1 = hamming_distance(arch_obj.integer_encoding, arch_obj.parent1.integer_encoding)/arch_obj.integer_size
-        arch_obj.dP2 = hamming_distance(arch_obj.integer_encoding, arch_obj.parent2.integer_encoding)/arch_obj.integer_size
+        #arch_obj.dP1 = normalized_hamming_distance(arch_obj.integer_encoding, arch_obj.parent1.integer_encoding)
+        #arch_obj.dP2 = normalized_hamming_distance(arch_obj.integer_encoding, arch_obj.parent2.integer_encoding)
+        arch_obj.dP1 = get_distance(v1 = arch_obj.integer_encoding, v2 = arch_obj.parent1.integer_encoding, distance_type = distance_type)
+        arch_obj.dP2 = get_distance(v1 = arch_obj.integer_encoding, v2 = arch_obj.parent2.integer_encoding, distance_type = distance_type)
 
          
 def is_None_or_empty(object):
@@ -518,7 +630,8 @@ def random_choice_except(lst, elem):
 class BLOCKS_CONSTANTS:
     SIZE_GENLIST = 12
     SIZE_BLOCKGEN = 8
-    SPC_INDEXES = list(range(2,SIZE_GENLIST-2)) #All blocks in between. Skip the INPat the beginning and GLOBAL and DENSE at the end.
+    #SPC_INDEXES = list(range(2,SIZE_GENLIST-2)) #All blocks in between. Skip the INPat the beginning and GLOBAL and DENSE at the end.
+    SPC_INDEXES = list(range(SIZE_BLOCKGEN)) #For integer encoding 1, that is, each integer represents a block (2 CONVS)
     MUTABLE_BCHANGEPARAM_INDEXES = SPC_INDEXES
     MUTABLE_BSWAP_INDEXES = SPC_INDEXES
     #MUTABLE_LPOLY_INDEXES = 
@@ -718,7 +831,8 @@ ARCH_NAMES_LIST = generate_letter_list()
 
 # Get current date and hour
 now = datetime.now()
-formatted_time = now.strftime("%Y-%m-%d_%H-%M-%S")
+#formatted_time = now.strftime("%Y-%m-%d_%H-%M-%S-%f")
+formatted_time = now.strftime("%m%d") + f"{now.microsecond // 1000:05d}"
 # Create filename
 architecture_filename_noCSV  = f"{formatted_time}"
 

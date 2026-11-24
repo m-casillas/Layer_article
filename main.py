@@ -1,7 +1,6 @@
 #gen_list = [{'INP':28}, {'CONV':[32,3]}, {'POOLMAX':[-1,2]}, {'CONV':[64,3]}, {'POOLMAX':[-1,2]}, {'FLATTEN':None}, {'DENSE':[64,'relu']}, {'DENSE':[10,'softmax']}]
 
-#Working on SCN
-#IDEA: NSGA2 for HV, cross and mut.
+#BALANCING: HYPERMUTATION, NORMALMUTATION, UNDERMUTATION. Too much exploration, too much exploitation. 
 #URGENT NOW: RWD with acc, flops and params not working. WTF is RWD???
 #F URGENT! Plot only certain GOs. For example, for accuracy, SBX shouldnt be plotted.
 #URGENT SOMEDAY: SBX crossover it's being called with max_int as 63 (because of blocks) This has to be changed for Layers. Also for mutation. 
@@ -16,7 +15,6 @@
 #TECNASGUI: filter option, add 'eliminate duplicates' button. Focus on the integer or binary encoding
 #ADD SWAP MUTATION TO LAYERS AND BLOCKS. MAYBE NOT TO LAYERS. BLOCKS IS DONE
 #SOMEDAY: RANDOM NUM OF ARCHS IS WRONG
-
 
 def is_running_in_colab():
     try:
@@ -35,7 +33,31 @@ if is_running_in_colab():
 
     os.chdir('/content/drive/MyDrive/DCC/Research/Layer_article')
 
+import sys
+import ast
+import os
+import time
+from globalsENAS import *
 
+if len(sys.argv) > 1:
+    print('Running with arguments')
+    #python main.py REAL UC,TPC,SPC MSWAP,None False
+    arguments = sys.argv[1:]
+    args_encoding = arguments[0]
+    args_cross_list = arguments[1].split(',')
+    args_mut_list = arguments[2].split(',')
+    args_INT2 = ast.literal_eval(arguments[3])
+    args_hyper_mut = ast.literal_eval(arguments[4])
+    ConfigClass.ENCODING_TYPE = args_encoding
+    config_tecnas.ENCODING_TYPE = args_encoding
+    ConfigClass.crossover_types_list = args_cross_list
+    config_tecnas.crossover_types_list = args_cross_list
+    ConfigClass.mutation_types_list = args_mut_list
+    config_tecnas.mutation_types_list = args_mut_list
+    config_tecnas.INTEGER_ENCODING2 = args_INT2
+    config_tecnas.HYPER_MUTATION = args_hyper_mut
+    print("ARGUMENTOS RECIBIDOS:", *arguments, flush=True)
+    
 from Genotype import *
 from Architecture import *
 from LayerRepresentation import *
@@ -44,23 +66,15 @@ from Crossover import *
 from TECNAS import *
 from PlotterENAS import *
 from ReportENAS import *
-from globalsENAS import *
-
 
 os.system("cls")
 os.system("clear")
 
-
-#experiment_folder = r"experiment01_cifar10complete"
-#C:\Users\xaero\OneDrive\ITESM DCC\Layer_article\results\surrogate_only
-#experiment_folder = r"experiment01_cifar10complete"
-
-print("REGRESSOR_TYPE =", ConfigClass.REGRESSOR_TYPE)
-
-tecNAS = TECNAS(HHSE = config_tecnas.HHSE, NSGA2 = config_tecnas.NSGA2, representation_type = ConfigClass.REPRESENTATION_TYPE, regressor_type = ConfigClass.REGRESSOR_TYPE, experiment_folder = ConfigClass.experiment_folder)
+#ConfigClass.mutation_types_list = ['LOL']
+tecNAS = TECNAS(HHSE = config_tecnas.HHSE, NSGA2 = config_tecnas.NSGA2, representation_type = ConfigClass.REPRESENTATION_TYPE, encoding_type = ConfigClass.ENCODING_TYPE, regressor_type = ConfigClass.REGRESSOR_TYPE, experiment_folder = ConfigClass.experiment_folder)
 start_time = time.time()
-#tecNAS.ENAS()
 tecNAS.mainLoop()
+
 end_time = time.time()
 # Calculate elapsed time
 elapsed_seconds = end_time - start_time
